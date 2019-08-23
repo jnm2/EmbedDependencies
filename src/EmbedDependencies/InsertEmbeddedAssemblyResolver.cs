@@ -3,11 +3,14 @@ using Microsoft.Build.Utilities;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
 namespace Techsola.EmbedDependencies
 {
+    // Template: https://sharplab.io/#v2:EYLgxg9gTgpgtADwGwBYA0AXEBLANgHwAEAmARgFgAoQgBgAJDSUBuK2h0gOgEkB5V6vUacASjABmuGGAzYIAOwHthIgK7zZAWxicAMhACGAExhQBbUkgbE6AWQhHVUqgG8qdD3QD0Xut3F0nAByAKIAKnQAwtAw7p4ADlDYAG4GGDAcVgCCAM45MJrAuACedAAiEgZOGAD6YjkQuMnY8gDmABS5+YUl+sbRGjAIGHSQg8NodF0FRcVBBtp08gswAJRxHm6UnjsM9O2pUHQ5GLALdAC8dGFQxQDiMBj1EKpQYDDTPcUAyqcwC+1ltpVuttrtNhtwZ5sAF2iczpo6NgcksnLhVgwAOyo3C4ARQ3aEbFjdLDPSGIwAMSgEE0vwRcL+C1W+KhAF9IRywR5IT46LwMAALUwAd2RsW5dESKTSGUY2TyMxK/Pkn1mzyaMHaEGAACtpCN8vITFBJhrkjAQhaNFkoK0UWtIVsCewDgYjvD/oirjd7o9nq93mqSvSvYCYCKpoqvvNtO0dLG1iDITtnQTobDPedkTj0Vjc6z03QU1DXYc6MBVOJxKZLksI3YCtAfkzNO0wAZ4gYwNgMMUQKNhWAANYwIztdotDCrLOaPQwNpCkGgosQyWr46tzjReLFMIQdqV6umFkl8EASCJUe6s3JxkPVZrUE4+9tUAMxXaIML6a5BLZnicpCkLSqk6SZHQobnL6DxPDADSBh80azFBbbBnMKx0AYyElImK6eGm4JXiEhRjiYRgBm8MCJjkABCxToYmL63LBABqBi4KoWrYTeuErMEKyTC8IzlrACFUXhZ67AA/HQfbxDAEDiO09iOFIqycOhnCwbYBjyDC8FweJ7yoe0YkvBJKz4UWA7yGiP5/oBkqgbKEFnEYCjKmU2AyHIyy3AAPIwNCTMFAB8dAkcAZFjpR7w0fRjErFJVzyA23m+Qo7rFEFpAhRwNBhe09ItK00SaF2sDPrwUBGC0HHcK08gxJE2GOuuBFSTsADaABEYSGehvUALp1oQhC9cG2DwQAOgNJxaUYuK9VJbICFyQA=
+
     public sealed class InsertEmbeddedAssemblyResolver : Task
     {
         [Required]
@@ -56,7 +59,13 @@ namespace Techsola.EmbedDependencies
                     throw new NotSupportedException("Versions of .NET Standard older than 2.0 are not supported.");
             }
 
-            GenerateAppDomainModuleInitializerIL(module, moduleType, il, appDomainAssemblyScope);
+            var importer = new MetadataImporter(module, scopesByAssemblySpec: new Dictionary<AssemblySpec, IMetadataScope>
+            {
+                [AssemblySpec.CoreLibrary] = module.TypeSystem.CoreLibrary,
+                [AssemblySpec.AssemblyContainingSystemAppDomain] = appDomainAssemblyScope
+            });
+
+            GenerateAppDomainModuleInitializerIL(module, moduleType, il, importer);
 
             moduleType.Methods.Add(moduleInitializer);
         }
@@ -68,28 +77,22 @@ namespace Techsola.EmbedDependencies
             return (string)targetFrameworkAttribute?.ConstructorArguments.First().Value;
         }
 
-        private static void GenerateAppDomainModuleInitializerIL(ModuleDefinition module, TypeDefinition moduleType, ILProcessor il, IMetadataScope appDomainAssemblyScope)
+        private static void GenerateAppDomainModuleInitializerIL(ModuleDefinition module, TypeDefinition moduleType, ILProcessor il, MetadataImporter importer)
         {
-            var appDomainType = module.ImportReference(new TypeReference(
-                "System", "AppDomain", module: null, appDomainAssemblyScope, valueType: false));
-
-            var resolveEventHandlerType = module.ImportReference(new TypeReference(
-                "System", "ResolveEventHandler", module: null, appDomainAssemblyScope, valueType: false));
-
-            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(module);
+            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(module, importer);
             moduleType.Methods.Add(assemblyResolveHandler);
 
             il.Emit(OpCodes.Call, new MethodReference(
                 "get_CurrentDomain",
-                returnType: appDomainType,
-                declaringType: appDomainType));
+                returnType: importer[TypeSpecs.SystemAppDomain],
+                declaringType: importer[TypeSpecs.SystemAppDomain]));
 
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldftn, assemblyResolveHandler);
             il.Emit(OpCodes.Newobj, new MethodReference(
                 ".ctor",
                 returnType: module.TypeSystem.Void,
-                declaringType: resolveEventHandlerType)
+                declaringType: importer[TypeSpecs.SystemResolveEventHandler])
             {
                 HasThis = true,
                 Parameters =
@@ -102,21 +105,28 @@ namespace Techsola.EmbedDependencies
             il.Emit(OpCodes.Callvirt, new MethodReference(
                 "add_AssemblyResolve",
                 returnType: module.TypeSystem.Void,
-                declaringType: appDomainType)
+                declaringType: importer[TypeSpecs.SystemAppDomain])
             {
                 HasThis = true,
-                Parameters = { new ParameterDefinition(resolveEventHandlerType) }
+                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemResolveEventHandler]) }
             });
 
             il.Emit(OpCodes.Ret);
         }
 
-        private static MethodDefinition CreateAppDomainAssemblyResolveHandler(ModuleDefinition module)
+        private static MethodDefinition CreateAppDomainAssemblyResolveHandler(ModuleDefinition module, MetadataImporter importer)
         {
-            var assemblyType = new TypeReference("System.Reflection", "Assembly", module, scope: null, valueType: false);
-
-            var handler = new MethodDefinition("OnAssemblyResolve", MethodAttributes.Static, assemblyType);
+            var handler = new MethodDefinition("OnAssemblyResolve", MethodAttributes.Static, returnType: importer[TypeSpecs.SystemReflectionAssembly])
+            {
+                Parameters =
+                {
+                    new ParameterDefinition(module.TypeSystem.Object),
+                    new ParameterDefinition(importer[TypeSpecs.SystemResolveEventArgs])
+                }
+            };
             var il = handler.Body.GetILProcessor();
+
+            // TODO
 
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
