@@ -1,7 +1,6 @@
 ﻿using Mono.Cecil;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Techsola.EmbedDependencies
 {
@@ -22,32 +21,34 @@ namespace Techsola.EmbedDependencies
 
         private TypeReference GetTypeReference(TypeSpec typeSpec)
         {
-            if (typeSpec.IsPrimitive(out var primitiveType))
+            switch (typeSpec)
             {
-                return primitiveType switch
-                {
-                    PrimitiveType.String => module.TypeSystem.String,
-                    _ => throw new NotImplementedException()
-                };
+                case PrimitiveTypeSpec spec:
+                    return spec.PrimitiveType switch
+                    {
+                        PrimitiveType.String => module.TypeSystem.String,
+                        _ => throw new NotImplementedException()
+                    };
+
+                case NamedTypeSpec spec:
+                    return new TypeReference(
+                        spec.Namespace,
+                        spec.Name,
+                        module,
+                        scope: this[spec.Assembly],
+                        spec.IsValueType);
+
+                case GenericInstantiationTypeSpec spec:
+                    var genericInstantiation = new GenericInstanceType(GetTypeReference(spec.TypeDefinition));
+
+                    foreach (var argument in spec.GenericArguments)
+                        genericInstantiation.GenericArguments.Add(GetTypeReference(argument));
+
+                    return genericInstantiation;
+
+                default:
+                    throw new NotImplementedException();
             }
-
-            var type = new TypeReference(
-                typeSpec.Namespace,
-                typeSpec.Name,
-                module,
-                scope: this[typeSpec.Assembly],
-                typeSpec.IsValueType);
-
-            if (!typeSpec.GenericArguments.Any()) return type;
-
-            var genericInstantiation = new GenericInstanceType(type);
-
-            foreach (var argument in typeSpec.GenericArguments)
-            {
-                genericInstantiation.GenericArguments.Add(GetTypeReference(argument));
-            }
-
-            return genericInstantiation;
         }
     }
 }
