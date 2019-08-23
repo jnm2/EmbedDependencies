@@ -4,6 +4,7 @@
     {
         CoreLibrary,
         AssemblyContainingSystemAppDomain,
-        AssemblyContainingSystemCollections
+        AssemblyContainingSystemCollections,
+        AssemblyContainingSystemStringComparer
     }
 }

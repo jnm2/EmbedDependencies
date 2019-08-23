@@ -28,12 +28,18 @@ namespace Techsola.EmbedDependencies
         {
             var assemblyDefinition = AssemblyDefinition.ReadAssembly(stream, new ReaderParameters { ReadSymbols = false });
 
-            CreateModuleInitializer(assemblyDefinition.MainModule);
+            var embeddedResourceNamesByAssemblyName = new Dictionary<string, string>
+            {
+                ["TestAssembly"] = @"Assemblies\TestAssembly.dll",
+                ["Foo"] = @"Assemblies\Foo.dll"
+            };
+
+            CreateModuleInitializer(assemblyDefinition.MainModule, embeddedResourceNamesByAssemblyName);
 
             assemblyDefinition.Write(stream);
         }
 
-        private static void CreateModuleInitializer(ModuleDefinition module)
+        private static void CreateModuleInitializer(ModuleDefinition module, IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName)
         {
             var moduleType = module.GetType("<Module>");
 
@@ -47,13 +53,20 @@ namespace Techsola.EmbedDependencies
             var appDomainAssemblyScope = module.TypeSystem.CoreLibrary;
             var collectionsAssemblyScope = module.TypeSystem.CoreLibrary;
 
+            var scopesByAssemblySpec = ((AssemblySpec[])Enum.GetValues(typeof(AssemblySpec)))
+                .ToDictionary(spec => spec, spec => module.TypeSystem.CoreLibrary);
+
             if (frameworkName == ".NETCoreApp")
             {
                 if (version < new Version(2, 0))
                     throw new NotSupportedException("Versions of .NET Core older than 2.0 are not supported.");
 
-                appDomainAssemblyScope = GetOrAddAssemblyReference(module, "System.Runtime.Extensions");
-                collectionsAssemblyScope = GetOrAddAssemblyReference(module, "System.Collections");
+                var runtimeExtensions = GetOrAddAssemblyReference(module, "System.Runtime.Extensions");
+                var collections = GetOrAddAssemblyReference(module, "System.Collections");
+
+                scopesByAssemblySpec[AssemblySpec.AssemblyContainingSystemAppDomain] = runtimeExtensions;
+                scopesByAssemblySpec[AssemblySpec.AssemblyContainingSystemStringComparer] = runtimeExtensions;
+                scopesByAssemblySpec[AssemblySpec.AssemblyContainingSystemCollections] = collections;
             }
             else if (frameworkName == ".NETStandard")
             {
@@ -61,13 +74,10 @@ namespace Techsola.EmbedDependencies
                     throw new NotSupportedException("Versions of .NET Standard older than 2.0 are not supported.");
             }
 
-            var importer = new MetadataImporter(module, scopesByAssemblySpec: new Dictionary<AssemblySpec, IMetadataScope>
-            {
-                [AssemblySpec.CoreLibrary] = module.TypeSystem.CoreLibrary,
-                [AssemblySpec.AssemblyContainingSystemAppDomain] = appDomainAssemblyScope,
-                [AssemblySpec.AssemblyContainingSystemCollections] = collectionsAssemblyScope
-            });
+            var importer = new MetadataImporter(module, scopesByAssemblySpec);
 
+            var dictionaryField = CreateDictionaryField(moduleType, importer);
+            GenerateDictionaryInitializationIL(il, dictionaryField, embeddedResourceNamesByAssemblyName, importer);
             GenerateAppDomainModuleInitializerIL(module, moduleType, il, importer);
 
             moduleType.Methods.Add(moduleInitializer);
@@ -92,10 +102,51 @@ namespace Techsola.EmbedDependencies
             return (string)targetFrameworkAttribute?.ConstructorArguments.First().Value;
         }
 
+        private static void GenerateDictionaryInitializationIL(
+            ILProcessor il,
+            FieldDefinition dictionaryField,
+            IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName,
+            MetadataImporter importer)
+        {
+            il.Emit(OpCodes.Call, new MethodReference(
+                "get_OrdinalIgnoreCase",
+                returnType: importer[TypeSpecs.SystemStringComparer],
+                declaringType: importer[TypeSpecs.SystemStringComparer]));
+
+            il.Emit(OpCodes.Newobj, new MethodReference(
+                ".ctor",
+                returnType: dictionaryField.Module.TypeSystem.Void,
+                declaringType: dictionaryField.FieldType)
+            {
+                HasThis = true,
+                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemCollectionsGenericIEqualityComparer(TypeSpecs.SystemString)]) }
+            });
+
+            foreach (var entry in embeddedResourceNamesByAssemblyName)
+            {
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldstr, entry.Key);
+                il.Emit(OpCodes.Ldstr, entry.Value);
+
+                il.Emit(OpCodes.Callvirt, new MethodReference(
+                    "set_Item",
+                    returnType: dictionaryField.Module.TypeSystem.Void,
+                    declaringType: dictionaryField.FieldType)
+                {
+                    HasThis = true,
+                    Parameters =
+                    {
+                        new ParameterDefinition(dictionaryField.Module.TypeSystem.String),
+                        new ParameterDefinition(dictionaryField.Module.TypeSystem.String)
+                    }
+                });
+            }
+
+            il.Emit(OpCodes.Stsfld, dictionaryField);
+        }
+
         private static void GenerateAppDomainModuleInitializerIL(ModuleDefinition module, TypeDefinition moduleType, ILProcessor il, MetadataImporter importer)
         {
-            var dictionaryField = CreateDictionaryField(moduleType, importer);
-
             var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(module, importer);
             moduleType.Methods.Add(assemblyResolveHandler);
 
