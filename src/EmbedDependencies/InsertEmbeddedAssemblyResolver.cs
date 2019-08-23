@@ -45,13 +45,15 @@ namespace Techsola.EmbedDependencies
             var version = parts is null ? null : Version.Parse(parts[1].Substring("Version=v".Length));
 
             var appDomainAssemblyScope = module.TypeSystem.CoreLibrary;
+            var collectionsAssemblyScope = module.TypeSystem.CoreLibrary;
 
             if (frameworkName == ".NETCoreApp")
             {
                 if (version < new Version(2, 0))
                     throw new NotSupportedException("Versions of .NET Core older than 2.0 are not supported.");
 
-                appDomainAssemblyScope = module.AssemblyReferences.Single(r => r.Name == "System.Runtime.Extensions");
+                appDomainAssemblyScope = GetOrAddAssemblyReference(module, "System.Runtime.Extensions");
+                collectionsAssemblyScope = GetOrAddAssemblyReference(module, "System.Collections");
             }
             else if (frameworkName == ".NETStandard")
             {
@@ -62,12 +64,25 @@ namespace Techsola.EmbedDependencies
             var importer = new MetadataImporter(module, scopesByAssemblySpec: new Dictionary<AssemblySpec, IMetadataScope>
             {
                 [AssemblySpec.CoreLibrary] = module.TypeSystem.CoreLibrary,
-                [AssemblySpec.AssemblyContainingSystemAppDomain] = appDomainAssemblyScope
+                [AssemblySpec.AssemblyContainingSystemAppDomain] = appDomainAssemblyScope,
+                [AssemblySpec.AssemblyContainingSystemCollections] = collectionsAssemblyScope
             });
 
             GenerateAppDomainModuleInitializerIL(module, moduleType, il, importer);
 
             moduleType.Methods.Add(moduleInitializer);
+        }
+
+        private static AssemblyNameReference GetOrAddAssemblyReference(ModuleDefinition module, string assemblyName)
+        {
+            var reference = module.AssemblyReferences.SingleOrDefault(r => r.Name == assemblyName);
+            if (reference is null)
+            {
+                reference = new AssemblyNameReference(assemblyName, version: null);
+                module.AssemblyReferences.Add(reference);
+            }
+
+            return reference;
         }
 
         private static string GetTargetFramework(AssemblyDefinition assembly)
@@ -79,6 +94,8 @@ namespace Techsola.EmbedDependencies
 
         private static void GenerateAppDomainModuleInitializerIL(ModuleDefinition module, TypeDefinition moduleType, ILProcessor il, MetadataImporter importer)
         {
+            var dictionaryField = CreateDictionaryField(moduleType, importer);
+
             var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(module, importer);
             moduleType.Methods.Add(assemblyResolveHandler);
 
@@ -112,6 +129,17 @@ namespace Techsola.EmbedDependencies
             });
 
             il.Emit(OpCodes.Ret);
+        }
+
+        private static FieldDefinition CreateDictionaryField(TypeDefinition moduleType, MetadataImporter importer)
+        {
+            var field = new FieldDefinition(
+                "EmbeddedResourceNamesByAssemblyName",
+                FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly,
+                importer[TypeSpecs.SystemCollectionsGenericDictionary(TypeSpecs.SystemString, TypeSpecs.SystemString)]);
+
+            moduleType.Fields.Add(field);
+            return field;
         }
 
         private static MethodDefinition CreateAppDomainAssemblyResolveHandler(ModuleDefinition module, MetadataImporter importer)

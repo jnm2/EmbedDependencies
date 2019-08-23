@@ -3,6 +3,7 @@
     internal enum AssemblySpec
     {
         CoreLibrary,
-        AssemblyContainingSystemAppDomain
+        AssemblyContainingSystemAppDomain,
+        AssemblyContainingSystemCollections
     }
 }
