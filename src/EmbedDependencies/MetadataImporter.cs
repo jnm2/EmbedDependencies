@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Techsola.EmbedDependencies
 {
@@ -45,6 +46,15 @@ namespace Techsola.EmbedDependencies
                         genericInstantiation.GenericArguments.Add(GetTypeReference(argument));
 
                     return genericInstantiation;
+
+                case GenericParameterTypeSpec spec:
+                    return (GenericParameter)typeof(GenericParameter)
+                        .GetConstructor(
+                            BindingFlags.NonPublic | BindingFlags.Instance,
+                            null,
+                            new[] { typeof(int), typeof(GenericParameterType), typeof(ModuleDefinition) },
+                            null)
+                        .Invoke(new object[] { spec.Index, GenericParameterType.Type, module });
 
                 default:
                     throw new NotImplementedException();

@@ -16,7 +16,7 @@
 
         public static TypeSpec SystemCollectionsGenericIEqualityComparer(TypeSpec t)
         {
-            return NamedTypeSpec.ReferenceType(AssemblySpec.AssemblyContainingSystemCollections, "System.Collections.Generic", "IEqualityComparer`1")
+            return NamedTypeSpec.ReferenceType(AssemblySpec.CoreLibrary, "System.Collections.Generic", "IEqualityComparer`1")
                 .WithGenericArguments(t);
         }
 

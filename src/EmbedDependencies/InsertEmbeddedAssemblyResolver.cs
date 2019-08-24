@@ -119,7 +119,7 @@ namespace Techsola.EmbedDependencies
                 declaringType: dictionaryField.FieldType)
             {
                 HasThis = true,
-                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemCollectionsGenericIEqualityComparer(TypeSpecs.SystemString)]) }
+                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemCollectionsGenericIEqualityComparer(new GenericParameterTypeSpec(0))]) }
             });
 
             foreach (var entry in embeddedResourceNamesByAssemblyName)
@@ -136,8 +136,8 @@ namespace Techsola.EmbedDependencies
                     HasThis = true,
                     Parameters =
                     {
-                        new ParameterDefinition(dictionaryField.Module.TypeSystem.String),
-                        new ParameterDefinition(dictionaryField.Module.TypeSystem.String)
+                        new ParameterDefinition(importer[new GenericParameterTypeSpec(0)]),
+                        new ParameterDefinition(importer[new GenericParameterTypeSpec(1)])
                     }
                 });
             }
