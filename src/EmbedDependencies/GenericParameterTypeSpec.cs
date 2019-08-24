@@ -1,4 +1,6 @@
-﻿namespace Techsola.EmbedDependencies
+﻿using System;
+
+namespace Techsola.EmbedDependencies
 {
     internal sealed class GenericParameterTypeSpec : TypeSpec
     {

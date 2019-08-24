@@ -78,6 +78,10 @@ namespace Techsola.EmbedDependencies
 
             var dictionaryField = CreateDictionaryField(moduleType, importer);
             GenerateDictionaryInitializationIL(il, dictionaryField, embeddedResourceNamesByAssemblyName, importer);
+
+            var getResourceAssemblyStreamOrNullMethod = CreateGetResourceAssemblyStreamOrNullMethod(dictionaryField, moduleType, importer);
+            moduleType.Methods.Add(getResourceAssemblyStreamOrNullMethod);
+
             GenerateAppDomainModuleInitializerIL(module, moduleType, il, importer);
 
             moduleType.Methods.Add(moduleInitializer);
@@ -195,7 +199,10 @@ namespace Techsola.EmbedDependencies
 
         private static MethodDefinition CreateAppDomainAssemblyResolveHandler(ModuleDefinition module, MetadataImporter importer)
         {
-            var handler = new MethodDefinition("OnAssemblyResolve", MethodAttributes.Static, returnType: importer[TypeSpecs.SystemReflectionAssembly])
+            var handler = new MethodDefinition(
+                "OnAssemblyResolve",
+                MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+                returnType: importer[TypeSpecs.SystemReflectionAssembly])
             {
                 Parameters =
                 {
@@ -203,6 +210,7 @@ namespace Techsola.EmbedDependencies
                     new ParameterDefinition(importer[TypeSpecs.SystemResolveEventArgs])
                 }
             };
+
             var il = handler.Body.GetILProcessor();
 
             // TODO
@@ -211,6 +219,87 @@ namespace Techsola.EmbedDependencies
             il.Emit(OpCodes.Ret);
 
             return handler;
+        }
+
+        private static MethodDefinition CreateGetResourceAssemblyStreamOrNullMethod(FieldDefinition dictionaryField, TypeDefinition moduleType, MetadataImporter importer)
+        {
+            var method = new MethodDefinition(
+                "GetResourceAssemblyStreamOrNull",
+                MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+                returnType: importer[TypeSpecs.SystemIOStream])
+            {
+                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemReflectionAssemblyName]) }
+            };
+
+            var il = method.Body.GetILProcessor();
+
+
+            il.Emit(OpCodes.Ldsfld, dictionaryField);
+            il.Emit(OpCodes.Ldarg_0);
+
+            il.Emit(OpCodes.Callvirt, new MethodReference(
+                "get_Name",
+                returnType: dictionaryField.Module.TypeSystem.String,
+                declaringType: importer[TypeSpecs.SystemReflectionAssemblyName])
+            {
+                HasThis = true
+            });
+
+            var resourceNameVariable = new VariableDefinition(dictionaryField.Module.TypeSystem.String);
+            method.Body.Variables.Add(resourceNameVariable);
+            il.Emit(OpCodes.Ldloca_S, resourceNameVariable);
+
+            il.Emit(OpCodes.Callvirt, new MethodReference(
+                "TryGetValue",
+                returnType: dictionaryField.Module.TypeSystem.Boolean,
+                declaringType: dictionaryField.FieldType)
+            {
+                HasThis = true,
+                Parameters =
+                {
+                    new ParameterDefinition(importer[new GenericParameterTypeSpec(0)]),
+                    new ParameterDefinition(importer[new ByRefTypeSpec(new GenericParameterTypeSpec(1))])
+                }
+            });
+
+            var successBranch = il.Create(OpCodes.Ldtoken, moduleType);
+
+            il.Emit(OpCodes.Brtrue_S, successBranch);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ret);
+
+            il.Append(successBranch);
+
+            il.Emit(OpCodes.Call, new MethodReference(
+                "GetTypeFromHandle",
+                returnType: importer[TypeSpecs.SystemType],
+                declaringType: importer[TypeSpecs.SystemType])
+            {
+                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemRuntimeTypeHandle]) }
+            });
+
+            il.Emit(OpCodes.Callvirt, new MethodReference(
+                "get_Assembly",
+                returnType: importer[TypeSpecs.SystemReflectionAssembly],
+                declaringType: importer[TypeSpecs.SystemType])
+            {
+                HasThis = true
+            });
+
+            il.Emit(OpCodes.Ldloc_0);
+
+            il.Emit(OpCodes.Callvirt, new MethodReference(
+                "GetManifestResourceStream",
+                returnType: importer[TypeSpecs.SystemIOStream],
+                declaringType: importer[TypeSpecs.SystemReflectionAssembly])
+            {
+                HasThis = true,
+                Parameters = { new ParameterDefinition(dictionaryField.Module.TypeSystem.String) }
+            });
+
+            il.Emit(OpCodes.Ret);
+
+            return method;
         }
     }
 }

@@ -31,6 +31,9 @@ namespace Techsola.EmbedDependencies
                         _ => throw new NotImplementedException()
                     };
 
+                case ByRefTypeSpec spec:
+                    return new ByReferenceType(GetTypeReference(spec.ElementType));
+
                 case NamedTypeSpec spec:
                     return new TypeReference(
                         spec.Namespace,

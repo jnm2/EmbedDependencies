@@ -5,6 +5,7 @@
         CoreLibrary,
         AssemblyContainingSystemAppDomain,
         AssemblyContainingSystemCollections,
-        AssemblyContainingSystemStringComparer
+        AssemblyContainingSystemStringComparer,
+        AssemblyContainingSystemStream
     }
 }

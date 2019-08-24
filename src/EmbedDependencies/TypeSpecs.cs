@@ -5,8 +5,10 @@
         public static TypeSpec SystemAppDomain { get; } = NamedTypeSpec.ReferenceType(AssemblySpec.AssemblyContainingSystemAppDomain, "System", "AppDomain");
         public static TypeSpec SystemResolveEventArgs { get; } = NamedTypeSpec.ReferenceType(AssemblySpec.AssemblyContainingSystemAppDomain, "System", "ResolveEventArgs");
         public static TypeSpec SystemResolveEventHandler { get; } = NamedTypeSpec.ReferenceType(AssemblySpec.AssemblyContainingSystemAppDomain, "System", "ResolveEventHandler");
+        public static TypeSpec SystemRuntimeTypeHandle { get; } = NamedTypeSpec.ValueType(AssemblySpec.CoreLibrary, "System", "RuntimeTypeHandle");
         public static TypeSpec SystemString { get; } = new PrimitiveTypeSpec(PrimitiveType.String);
         public static TypeSpec SystemStringComparer { get; } = NamedTypeSpec.ReferenceType(AssemblySpec.AssemblyContainingSystemStringComparer, "System", "StringComparer");
+        public static TypeSpec SystemType { get; } = NamedTypeSpec.ReferenceType(AssemblySpec.CoreLibrary, "System", "Type");
 
         public static TypeSpec SystemCollectionsGenericDictionary(TypeSpec tKey, TypeSpec tValue)
         {
@@ -20,6 +22,9 @@
                 .WithGenericArguments(t);
         }
 
+        public static TypeSpec SystemIOStream { get; } = NamedTypeSpec.ReferenceType(AssemblySpec.AssemblyContainingSystemStream, "System.IO", "Stream");
+
         public static TypeSpec SystemReflectionAssembly { get; } = NamedTypeSpec.ReferenceType(AssemblySpec.CoreLibrary, "System.Reflection", "Assembly");
+        public static TypeSpec SystemReflectionAssemblyName { get; } = NamedTypeSpec.ReferenceType(AssemblySpec.CoreLibrary, "System.Reflection", "AssemblyName");
     }
 }
