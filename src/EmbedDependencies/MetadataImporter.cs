@@ -18,7 +18,7 @@ namespace Techsola.EmbedDependencies
 
         public IMetadataScope this[AssemblySpec assemblySpec] => scopesByAssemblySpec[assemblySpec];
 
-        public TypeReference this[TypeSpec typeSpec] => module.ImportReference(GetTypeReference(typeSpec));
+        public TypeReference this[TypeSpec typeSpec] => GetTypeReference(typeSpec);
 
         private TypeReference GetTypeReference(TypeSpec typeSpec)
         {
