@@ -24,7 +24,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             var ex = AssertException<ArgumentException>(whitespace);
 
-            ex.ParamName.ShouldBe("typeNameSyntax");
+            ex.ParamName.ShouldBe("typeSyntax");
         }
 
         [Test]
@@ -185,7 +185,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class Foo",
-                P.GetUserDefinedType(isValueType: false, null, "", "Foo"));
+                P.GetTypeFromReference(isValueType: false, null, "", "Foo"));
         }
 
         [Test]
@@ -193,7 +193,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "valuetype Foo",
-                P.GetUserDefinedType(isValueType: true, null, "", "Foo"));
+                P.GetTypeFromReference(isValueType: true, null, "", "Foo"));
         }
 
         [Test]
@@ -201,7 +201,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class SomeNamespace.Foo",
-                P.GetUserDefinedType(false, null, "SomeNamespace", "Foo"));
+                P.GetTypeFromReference(false, null, "SomeNamespace", "Foo"));
         }
 
         [Test]
@@ -209,7 +209,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class Some.Namespace.With.A.Lot.Of.Dots.Foo",
-                P.GetUserDefinedType(false, null, "Some.Namespace.With.A.Lot.Of.Dots", "Foo"));
+                P.GetTypeFromReference(false, null, "Some.Namespace.With.A.Lot.Of.Dots", "Foo"));
         }
 
         [Test]
@@ -217,7 +217,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class Foo/Bar",
-                P.GetUserDefinedType(false, null, "", "Foo", new[] { "Bar" }));
+                P.GetTypeFromReference(false, null, "", "Foo", new[] { "Bar" }));
         }
 
         [Test]
@@ -225,7 +225,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class Foo/This.Is.Legal",
-                P.GetUserDefinedType(false, null, "", "Foo", new[] { "This.Is.Legal" }));
+                P.GetTypeFromReference(false, null, "", "Foo", new[] { "This.Is.Legal" }));
         }
 
         [Test]
@@ -233,7 +233,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class Foo/Bar/Baz",
-                P.GetUserDefinedType(false, null, "", "Foo", new[] { "Bar", "Baz" }));
+                P.GetTypeFromReference(false, null, "", "Foo", new[] { "Bar", "Baz" }));
         }
 
         [Test]
@@ -241,7 +241,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class A.B.C/D.E.F/G.H.I",
-                P.GetUserDefinedType(false, null, "A.B", "C", new[] { "D.E.F", "G.H.I" }));
+                P.GetTypeFromReference(false, null, "A.B", "C", new[] { "D.E.F", "G.H.I" }));
         }
 
         [Test]
@@ -249,7 +249,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class [a]Foo",
-                P.GetUserDefinedType(isValueType: false, "a", "", "Foo"));
+                P.GetTypeFromReference(isValueType: false, "a", "", "Foo"));
         }
 
         [Test]
@@ -257,7 +257,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "valuetype [a]Foo",
-                P.GetUserDefinedType(isValueType: true, "a", "", "Foo"));
+                P.GetTypeFromReference(isValueType: true, "a", "", "Foo"));
         }
 
         [Test]
@@ -265,7 +265,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class [a.b.c]Foo",
-                P.GetUserDefinedType(isValueType: false, "a.b.c", "", "Foo"));
+                P.GetTypeFromReference(isValueType: false, "a.b.c", "", "Foo"));
         }
 
         [Test]
@@ -273,7 +273,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             AssertCallTree(
                 "class [a.b.c]D.E.F",
-                P.GetUserDefinedType(isValueType: false, "a.b.c", "D.E", "F"));
+                P.GetTypeFromReference(isValueType: false, "a.b.c", "D.E", "F"));
         }
 
         [Test]
@@ -289,7 +289,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
             AssertCallTree(
                 "class Foo<bool>",
                 P.GetGenericInstantiation(
-                    P.GetUserDefinedType(false, null, "", "Foo"),
+                    P.GetTypeFromReference(false, null, "", "Foo"),
                     new[]
                     {
                         P.GetPrimitiveType(PrimitiveTypeCode.Boolean)
@@ -302,13 +302,13 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
             AssertCallTree(
                 "class Foo/X<bool,class [a]Some.Namespace.Bar[,]<!0>>",
                 P.GetGenericInstantiation(
-                    P.GetUserDefinedType(false, null, "", "Foo", new[] { "X" }),
+                    P.GetTypeFromReference(false, null, "", "Foo", new[] { "X" }),
                     new[]
                     {
                         P.GetPrimitiveType(PrimitiveTypeCode.Boolean),
                         P.GetGenericInstantiation(
                             P.GetArrayType(
-                                P.GetUserDefinedType(false, "a", "Some.Namespace", "Bar"),
+                                P.GetTypeFromReference(false, "a", "Some.Namespace", "Bar"),
                                 rank: 2),
                             new[]
                             {

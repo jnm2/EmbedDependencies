@@ -5,32 +5,32 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 {
     public static class ILAsmParser
     {
-        public static TType Parse<TType>(string typeNameSyntax, IILAsmTypeNameSyntaxTypeProvider<TType> provider)
+        public static TType Parse<TType>(string typeSyntax, IILAsmTypeSyntaxTypeProvider<TType> provider)
         {
-            return new ILAsmParser<TType>(provider).Parse(typeNameSyntax);
+            return new ILAsmParser<TType>(provider).Parse(typeSyntax);
         }
     }
 
     internal sealed class ILAsmParser<TType>
     {
-        private readonly IILAsmTypeNameSyntaxTypeProvider<TType> provider;
+        private readonly IILAsmTypeSyntaxTypeProvider<TType> provider;
         private readonly ILAsmLexer lexer = new ILAsmLexer();
 
-        public ILAsmParser(IILAsmTypeNameSyntaxTypeProvider<TType> provider)
+        public ILAsmParser(IILAsmTypeSyntaxTypeProvider<TType> provider)
         {
             this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
         }
 
-        public TType Parse(string typeNameSyntax)
+        public TType Parse(string typeSyntax)
         {
-            var span = (StringSpan)typeNameSyntax;
+            var span = (StringSpan)typeSyntax;
 
             var result = ParseType(ref span);
 
             if (result.UnusedToken != null)
             {
                 if (result.UnusedToken.Value.Kind == SyntaxKind.End)
-                    throw new ArgumentException("Type name syntax must be specified.", nameof(typeNameSyntax));
+                    throw new ArgumentException("Type syntax must be specified.", nameof(typeSyntax));
 
                 throw new FormatException(result.UnusedTokenMessage);
             }
@@ -122,7 +122,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
                     case SyntaxKind.EllipsisToken:
                     case SyntaxKind.NumericLiteralToken:
-                        throw new NotSupportedException($"Specifying array bounds is not supported by {nameof(IILAsmTypeNameSyntaxTypeProvider<TType>)}.");
+                        throw new NotSupportedException($"Specifying array bounds is not supported by {nameof(IILAsmTypeSyntaxTypeProvider<TType>)}.");
 
                     default:
                         throw new FormatException("Expected ',', ']', '...', or Int32 literal.");
@@ -165,7 +165,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
                 case SyntaxKind.ClassKeyword:
                 case SyntaxKind.ValueTypeKeyword:
-                    return ParseUserDefinedType(ref span, next.Kind == SyntaxKind.ValueTypeKeyword);
+                    return ParseTypeFromReference(ref span, next.Kind == SyntaxKind.ValueTypeKeyword);
 
                 case SyntaxKind.Float32Keyword:
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Single);
@@ -237,17 +237,17 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
                 case SyntaxKind.ModoptKeyword:
                 case SyntaxKind.ModreqKeyword:
-                    throw new NotSupportedException($"Custom modifiers are not currently supported by {nameof(IILAsmTypeNameSyntaxTypeProvider<TType>)}.");
+                    throw new NotSupportedException($"Custom modifiers are not currently supported by {nameof(IILAsmTypeSyntaxTypeProvider<TType>)}.");
 
                 case SyntaxKind.MethodKeyword:
-                    throw new NotSupportedException($"Method pointers are not currently supported by {nameof(IILAsmTypeNameSyntaxTypeProvider<TType>)}.");
+                    throw new NotSupportedException($"Method pointers are not currently supported by {nameof(IILAsmTypeSyntaxTypeProvider<TType>)}.");
 
                 default:
                     return new ParseResult<TType>(next, "Expected valid type keyword.");
             }
         }
 
-        private TType ParseUserDefinedType(ref StringSpan span, bool isValueType)
+        private TType ParseTypeFromReference(ref StringSpan span, bool isValueType)
         {
             ParseTopLevelName(ref span,
                 isValueType,
@@ -260,7 +260,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 ? ParseNestedNames(ref span)
                 : Array.Empty<string>();
 
-            return provider.GetUserDefinedType(
+            return provider.GetTypeFromReference(
                 isValueType,
                 assemblyName,
                 namespaceName,
@@ -282,7 +282,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                             break;
 
                         case SyntaxKind.DotModuleKeyword:
-                            throw new NotSupportedException($"'.module' syntax is not currently supported by {nameof(IILAsmTypeNameSyntaxTypeProvider<TType>)}.");
+                            throw new NotSupportedException($"'.module' syntax is not currently supported by {nameof(IILAsmTypeSyntaxTypeProvider<TType>)}.");
 
                         default:
                             throw new FormatException("Expected identifier or '.module' to follow '['.");

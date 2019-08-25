@@ -6,7 +6,7 @@ using Techsola.EmbedDependencies.ILAsmSyntax;
 
 namespace Techsola.EmbedDependencies
 {
-    internal sealed class MonoCecilTypeProvider : IILAsmTypeNameSyntaxTypeProvider<TypeReference>
+    internal sealed class MonoCecilTypeProvider : IILAsmTypeSyntaxTypeProvider<TypeReference>
     {
         private readonly ModuleDefinition module;
         private readonly Func<string, IMetadataScope> getScopeForAssemblyName;
@@ -113,7 +113,7 @@ namespace Techsola.EmbedDependencies
             }
         }
 
-        public TypeReference GetUserDefinedType(bool isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames)
+        public TypeReference GetTypeFromReference(bool isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames)
         {
             var scope = assemblyName is null ? null : getScopeForAssemblyName.Invoke(assemblyName);
 

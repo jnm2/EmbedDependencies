@@ -5,7 +5,7 @@ using Techsola.EmbedDependencies.ILAsmSyntax;
 
 namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
 {
-    internal sealed class TestFormattingTypeProvider : IILAsmTypeNameSyntaxTypeProvider<string>
+    internal sealed class TestFormattingTypeProvider : IILAsmTypeSyntaxTypeProvider<string>
     {
         public static TestFormattingTypeProvider Instance { get; } = new TestFormattingTypeProvider();
 
@@ -26,10 +26,10 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
             return $"GetPrimitiveType({typeCode})";
         }
 
-        public string GetUserDefinedType(bool isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames = null)
+        public string GetTypeFromReference(bool isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames = null)
         {
             if (nestedTypeNames is null) nestedTypeNames = Array.Empty<string>();
-            return $"GetUserDefinedType(isValueType: {FormatBooleanLiteral(isValueType)}, assemblyName: {FormatStringLiteral(assemblyName)}, namespaceName: {FormatStringLiteral(namespaceName)}, topLevelTypeName: {FormatStringLiteral(topLevelTypeName)}, nestedTypeNames: {FormatArrayLiteral(nestedTypeNames)})";
+            return $"GetTypeFromReference(isValueType: {FormatBooleanLiteral(isValueType)}, assemblyName: {FormatStringLiteral(assemblyName)}, namespaceName: {FormatStringLiteral(namespaceName)}, topLevelTypeName: {FormatStringLiteral(topLevelTypeName)}, nestedTypeNames: {FormatArrayLiteral(nestedTypeNames)})";
         }
 
         public string GetByReferenceType(string elementType)
