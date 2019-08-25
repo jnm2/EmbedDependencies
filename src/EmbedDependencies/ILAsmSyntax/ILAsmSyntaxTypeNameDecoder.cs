@@ -53,10 +53,45 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         type = provider.GetPinnedType(type);
                         break;
 
+                    case SyntaxKind.OpenSquareToken:
+                        var rank = ReadArrayRank(ref span);
+                        type = provider.GetArrayType(type, rank);
+                        break;
+
                     default:
                         throw new NotImplementedException();
                 }
             }
+        }
+
+        private int ReadArrayRank(ref StringSpan span)
+        {
+            var rank = 1;
+
+            while (true)
+            {
+                var next = lexer.Lex(ref span);
+                switch (next.Kind)
+                {
+                    case SyntaxKind.CloseSquareToken:
+                        break;
+
+                    case SyntaxKind.CommaToken:
+                        rank++;
+                        continue;
+
+                    case SyntaxKind.EllipsisToken:
+                    case SyntaxKind.NumericLiteralToken:
+                        throw new NotSupportedException($"Specifying array bounds is not supported by {nameof(IILAsmTypeNameSyntaxTypeProvider<TType>)}.");
+
+                    default:
+                        throw new FormatException("Expected ',', ']', '...', or Int32 literal.");
+                }
+
+                break;
+            }
+
+            return rank;
         }
 
         private TType ParseTypeKeyword(ref StringSpan span, string paramNameForWhitespaceException)

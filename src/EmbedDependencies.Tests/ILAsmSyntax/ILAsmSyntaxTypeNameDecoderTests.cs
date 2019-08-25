@@ -134,6 +134,53 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         }
 
         [Test]
+        public static void Simple_array()
+        {
+            AssertCallTree(
+                "bool[]",
+                P.GetArrayType(
+                    P.GetPrimitiveType(PrimitiveTypeCode.Boolean),
+                    rank: 1));
+        }
+
+        [Test]
+        public static void Multidimentional_array()
+        {
+            AssertCallTree(
+                "bool[,,,]",
+                P.GetArrayType(
+                    P.GetPrimitiveType(PrimitiveTypeCode.Boolean),
+                    rank: 4));
+        }
+
+        [TestCase("[...]")]
+        [TestCase("[1]")]
+        [TestCase("[1...]")]
+        [TestCase("[1...2]")]
+        [TestCase("[,...]")]
+        [TestCase("[,,1]")]
+        [TestCase("[,1...,]")]
+        [TestCase("[1...2,,]")]
+        public static void Array_with_bounds_not_supported(string syntax)
+        {
+            AssertException<NotSupportedException>("bool" + syntax);
+        }
+
+        [Test]
+        public static void Nested_arrays()
+        {
+            AssertCallTree(
+                "bool[,][][,,]",
+                 P.GetArrayType(
+                     P.GetArrayType(
+                        P.GetArrayType(
+                            P.GetPrimitiveType(PrimitiveTypeCode.Boolean),
+                            rank: 2),
+                        rank: 1),
+                     rank: 3));
+        }
+
+        [Test]
         public static void Class_with_simple_name()
         {
             AssertCallTree(
