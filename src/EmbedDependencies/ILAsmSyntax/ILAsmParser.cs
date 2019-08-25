@@ -3,25 +3,25 @@ using System.Collections.Generic;
 
 namespace Techsola.EmbedDependencies.ILAsmSyntax
 {
-    public static class ILAsmSyntaxTypeNameDecoder
+    public static class ILAsmParser
     {
-        public static TType Decode<TType>(string typeNameSyntax, IILAsmTypeNameSyntaxTypeProvider<TType> provider)
+        public static TType Parse<TType>(string typeNameSyntax, IILAsmTypeNameSyntaxTypeProvider<TType> provider)
         {
-            return new ILAsmSyntaxTypeNameDecoder<TType>(provider).Decode(typeNameSyntax);
+            return new ILAsmParser<TType>(provider).Parse(typeNameSyntax);
         }
     }
 
-    internal sealed class ILAsmSyntaxTypeNameDecoder<TType>
+    internal sealed class ILAsmParser<TType>
     {
         private readonly IILAsmTypeNameSyntaxTypeProvider<TType> provider;
         private readonly ILAsmLexer lexer = new ILAsmLexer();
 
-        public ILAsmSyntaxTypeNameDecoder(IILAsmTypeNameSyntaxTypeProvider<TType> provider)
+        public ILAsmParser(IILAsmTypeNameSyntaxTypeProvider<TType> provider)
         {
             this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
         }
 
-        public TType Decode(string typeNameSyntax)
+        public TType Parse(string typeNameSyntax)
         {
             var span = (StringSpan)typeNameSyntax;
 

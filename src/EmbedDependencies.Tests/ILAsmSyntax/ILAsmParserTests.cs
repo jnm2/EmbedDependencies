@@ -5,18 +5,18 @@ using Techsola.EmbedDependencies.ILAsmSyntax;
 
 namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
 {
-    public static class ILAsmSyntaxTypeNameDecoderTests
+    public static class ILAsmParserTests
     {
         private static readonly TestFormattingTypeProvider P = TestFormattingTypeProvider.Instance;
 
         private static void AssertCallTree(string syntax, string expected)
         {
-            ILAsmSyntaxTypeNameDecoder.Decode(syntax, P).ShouldBe(expected);
+            ILAsmParser.Parse(syntax, P).ShouldBe(expected);
         }
 
         private static T AssertException<T>(string syntax) where T : Exception
         {
-            return Should.Throw<T>(() => ILAsmSyntaxTypeNameDecoder.Decode(syntax, P));
+            return Should.Throw<T>(() => ILAsmParser.Parse(syntax, P));
         }
 
         [Test]

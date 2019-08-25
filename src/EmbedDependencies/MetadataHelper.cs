@@ -18,7 +18,7 @@ namespace Techsola.EmbedDependencies
 
         public TypeReference this[string serializedName]
         {
-            get => ILAsmSyntaxTypeNameDecoder.Decode(serializedName, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
+            get => ILAsmParser.Parse(serializedName, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
         }
 
         private IMetadataScope GetScopeForAssemblyName(string assemblyName)
