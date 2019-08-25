@@ -27,12 +27,12 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
             var result = ParseType(ref span);
 
-            if (result.UnusedToken != null)
+            if (result.PeekedTokenMessage != null)
             {
-                if (result.UnusedToken.Value.Kind == SyntaxKind.End)
+                if (lexer.PeekedTokenKind == SyntaxKind.End)
                     throw new ArgumentException("Type syntax must be specified.", nameof(typeSyntax));
 
-                throw new FormatException(result.UnusedTokenMessage);
+                throw new FormatException(result.PeekedTokenMessage);
             }
 
             return result.Value.Value;
@@ -45,42 +45,47 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
             while (true)
             {
-                var next = lexer.Lex(ref span);
-
-                switch (next.Kind)
+                switch (lexer.PeekKind(ref span))
                 {
                     case SyntaxKind.End:
+                        lexer.DiscardPeekedToken();
                         return type;
 
                     case SyntaxKind.AmpersandToken:
+                        lexer.DiscardPeekedToken();
                         type = provider.GetByReferenceType(type);
                         break;
 
                     case SyntaxKind.AsteriskToken:
+                        lexer.DiscardPeekedToken();
                         type = provider.GetPointerType(type);
                         break;
 
                     case SyntaxKind.PinnedKeyword:
+                        lexer.DiscardPeekedToken();
                         type = provider.GetPinnedType(type);
                         break;
 
                     case SyntaxKind.OpenSquareToken:
+                        lexer.DiscardPeekedToken();
                         var rank = ReadArrayRank(ref span);
                         type = provider.GetArrayType(type, rank);
                         break;
 
                     case SyntaxKind.OpenAngleToken:
+                        lexer.DiscardPeekedToken();
                         var arguments = new List<TType>();
 
                         while (true)
                         {
                             result = ParseType(ref span);
                             if (!result.Value.IsSome(out var argument))
-                                throw new FormatException(result.UnusedTokenMessage);
+                                throw new FormatException(result.PeekedTokenMessage);
 
                             arguments.Add(argument);
 
-                            switch (result.UnusedToken?.Kind)
+                            var next = lexer.Lex(ref span);
+                            switch (next.Kind)
                             {
                                 case SyntaxKind.CloseAngleToken:
                                     break;
@@ -99,7 +104,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         break;
 
                     default:
-                        return new ParseResult<TType>(type, next, "Expected '&', '*', 'pinned', '[', '<', or end to follow type.");
+                        return new ParseResult<TType>(type, "Expected '&', '*', 'pinned', '[', '<', or end to follow type.");
                 }
             }
         }
@@ -136,15 +141,14 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
         private ParseResult<TType> ParseTypeKeyword(ref StringSpan span)
         {
-            var next = lexer.Lex(ref span);
-
-            switch (next.Kind)
+            switch (lexer.PeekKind(ref span))
             {
                 case SyntaxKind.ExclamationToken:
                 case SyntaxKind.DoubleExclamationToken:
-                    var isMethod = next.Kind == SyntaxKind.DoubleExclamationToken;
+                    var isMethod = lexer.PeekedTokenKind == SyntaxKind.DoubleExclamationToken;
+                    lexer.DiscardPeekedToken();
 
-                    next = lexer.Lex(ref span);
+                    var next = lexer.Lex(ref span);
                     if (next.Kind != SyntaxKind.NumericLiteralToken)
                     {
                         var syntax = isMethod ? "!!" : "!";
@@ -158,34 +162,46 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         : provider.GetGenericTypeParameter(index);
 
                 case SyntaxKind.BoolKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Boolean);
 
                 case SyntaxKind.CharKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Char);
 
                 case SyntaxKind.ClassKeyword:
                 case SyntaxKind.ValueTypeKeyword:
-                    return ParseTypeFromReference(ref span, next.Kind == SyntaxKind.ValueTypeKeyword);
+                    var isValueType = lexer.PeekedTokenKind == SyntaxKind.ValueTypeKeyword;
+                    lexer.DiscardPeekedToken();
+                    return ParseTypeFromReference(ref span, isValueType);
 
                 case SyntaxKind.Float32Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Single);
 
                 case SyntaxKind.Float64Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Double);
 
                 case SyntaxKind.Int8Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.SByte);
 
                 case SyntaxKind.Int16Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Int16);
 
                 case SyntaxKind.Int32Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Int32);
 
                 case SyntaxKind.Int64Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Int64);
 
                 case SyntaxKind.NativeKeyword:
+                    lexer.DiscardPeekedToken();
+
                     next = lexer.Lex(ref span);
                     switch (next.Kind)
                     {
@@ -204,15 +220,20 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     }
 
                 case SyntaxKind.ObjectKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Object);
 
                 case SyntaxKind.StringKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.String);
 
                 case SyntaxKind.TypedReferenceKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.TypedReference);
 
                 case SyntaxKind.UnsignedKeyword:
+                    lexer.DiscardPeekedToken();
+
                     next = lexer.Lex(ref span);
                     switch (next.Kind)
                     {
@@ -233,6 +254,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     }
 
                 case SyntaxKind.VoidKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Void);
 
                 case SyntaxKind.ModoptKeyword:
@@ -243,7 +265,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     throw new NotSupportedException($"Method pointers are not currently supported by {nameof(IILAsmTypeSyntaxTypeProvider<TType>)}.");
 
                 default:
-                    return new ParseResult<TType>(next, "Expected valid type keyword.");
+                    return new ParseResult<TType>("Expected valid type keyword.");
             }
         }
 

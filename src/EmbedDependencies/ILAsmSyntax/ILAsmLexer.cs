@@ -33,6 +33,11 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
         private SyntaxToken? peekedToken;
 
+        public SyntaxKind PeekedTokenKind
+        {
+            get => peekedToken?.Kind ?? throw new InvalidOperationException("No token is currently peeked.");
+        }
+
         public SyntaxKind PeekKind(ref StringSpan span)
         {
             if (peekedToken != null) return peekedToken.Value.Kind;
