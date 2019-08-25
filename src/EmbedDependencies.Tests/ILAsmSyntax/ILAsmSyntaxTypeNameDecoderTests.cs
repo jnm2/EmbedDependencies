@@ -282,5 +282,39 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
             AssertException<NotSupportedException>(
                 "class [.module foo.netmodule]Foo");
         }
+
+        [Test]
+        public static void Simple_generic_instantion()
+        {
+            AssertCallTree(
+                "class Foo<bool>",
+                P.GetGenericInstantiation(
+                    P.GetUserDefinedType(false, null, "", "Foo"),
+                    new[]
+                    {
+                        P.GetPrimitiveType(PrimitiveTypeCode.Boolean)
+                    }));
+        }
+
+        [Test]
+        public static void Complex_generic_instantion()
+        {
+            AssertCallTree(
+                "class Foo/X<bool,class [a]Some.Namespace.Bar[,]<!0>>",
+                P.GetGenericInstantiation(
+                    P.GetUserDefinedType(false, null, "", "Foo", new[] { "X" }),
+                    new[]
+                    {
+                        P.GetPrimitiveType(PrimitiveTypeCode.Boolean),
+                        P.GetGenericInstantiation(
+                            P.GetArrayType(
+                                P.GetUserDefinedType(false, "a", "Some.Namespace", "Bar"),
+                                rank: 2),
+                            new[]
+                            {
+                                P.GetGenericTypeParameter(0)
+                            })
+                    }));
+        }
     }
 }

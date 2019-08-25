@@ -25,12 +25,23 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
         {
             var span = (StringSpan)typeNameSyntax;
 
-            return ParseType(ref span, nameof(typeNameSyntax));
+            var result = ParseType(ref span);
+
+            if (result.UnusedToken != null)
+            {
+                if (result.UnusedToken.Value.Kind == SyntaxKind.End)
+                    throw new ArgumentException("Type name syntax must be specified.", nameof(typeNameSyntax));
+
+                throw new FormatException(result.UnusedTokenMessage);
+            }
+
+            return result.Value.Value;
         }
 
-        private TType ParseType(ref StringSpan span, string paramNameForWhitespaceException)
+        private ParseResult<TType> ParseType(ref StringSpan span)
         {
-            var type = ParseTypeKeyword(ref span, paramNameForWhitespaceException);
+            var result = ParseTypeKeyword(ref span);
+            if (!result.Value.IsSome(out var type)) return result;
 
             while (true)
             {
@@ -58,8 +69,37 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         type = provider.GetArrayType(type, rank);
                         break;
 
+                    case SyntaxKind.OpenAngleToken:
+                        var arguments = new List<TType>();
+
+                        while (true)
+                        {
+                            result = ParseType(ref span);
+                            if (!result.Value.IsSome(out var argument))
+                                throw new FormatException(result.UnusedTokenMessage);
+
+                            arguments.Add(argument);
+
+                            switch (result.UnusedToken?.Kind)
+                            {
+                                case SyntaxKind.CloseAngleToken:
+                                    break;
+
+                                case SyntaxKind.CommaToken:
+                                    continue;
+
+                                default:
+                                    throw new FormatException("Expected ',' or '>'.");
+                            }
+
+                            break;
+                        }
+
+                        type = provider.GetGenericInstantiation(type, arguments);
+                        break;
+
                     default:
-                        throw new NotImplementedException();
+                        return new ParseResult<TType>(type, next, "Expected '&', '*', 'pinned', '[', '<', or end to follow type.");
                 }
             }
         }
@@ -94,7 +134,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             return rank;
         }
 
-        private TType ParseTypeKeyword(ref StringSpan span, string paramNameForWhitespaceException)
+        private ParseResult<TType> ParseTypeKeyword(ref StringSpan span)
         {
             var next = lexer.Lex(ref span);
 
@@ -202,11 +242,8 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 case SyntaxKind.MethodKeyword:
                     throw new NotSupportedException($"Method pointers are not currently supported by {nameof(IILAsmTypeNameSyntaxTypeProvider<TType>)}.");
 
-                case SyntaxKind.End:
-                    throw new ArgumentException("Type name syntax must be specified.", paramNameForWhitespaceException);
-
                 default:
-                    throw new FormatException("Expected valid type keyword.");
+                    return new ParseResult<TType>(next, "Expected valid type keyword.");
             }
         }
 
