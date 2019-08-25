@@ -16,9 +16,9 @@ namespace Techsola.EmbedDependencies
             this.scopesByAssemblyMoniker = scopesByAssemblyMoniker ?? throw new ArgumentNullException(nameof(scopesByAssemblyMoniker));
         }
 
-        public TypeReference this[string serializedName]
+        public TypeReference GetTypeReference(string ilasmSyntax)
         {
-            get => ILAsmParser.Parse(serializedName, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
+            return ILAsmParser.ParseType(ilasmSyntax, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
         }
 
         private IMetadataScope GetScopeForAssemblyName(string assemblyName)

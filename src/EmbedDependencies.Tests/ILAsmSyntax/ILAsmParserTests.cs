@@ -11,12 +11,12 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
 
         private static void AssertCallTree(string syntax, string expected)
         {
-            ILAsmParser.Parse(syntax, P).ShouldBe(expected);
+            ILAsmParser.ParseType(syntax, P).ShouldBe(expected);
         }
 
         private static T AssertException<T>(string syntax) where T : Exception
         {
-            return Should.Throw<T>(() => ILAsmParser.Parse(syntax, P));
+            return Should.Throw<T>(() => ILAsmParser.ParseType(syntax, P));
         }
 
         [Test]

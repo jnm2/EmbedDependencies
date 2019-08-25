@@ -5,9 +5,9 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 {
     public static class ILAsmParser
     {
-        public static TType Parse<TType>(string typeSyntax, IILAsmTypeSyntaxTypeProvider<TType> provider)
+        public static TType ParseType<TType>(string typeSyntax, IILAsmTypeSyntaxTypeProvider<TType> provider)
         {
-            return new ILAsmParser<TType>(provider).Parse(typeSyntax);
+            return new ILAsmParser<TType>(provider).ParseType(typeSyntax);
         }
     }
 
@@ -21,7 +21,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
         }
 
-        public TType Parse(string typeSyntax)
+        public TType ParseType(string typeSyntax)
         {
             var span = (StringSpan)typeSyntax;
 
