@@ -509,5 +509,29 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             Should.Throw<NotSupportedException>(() => ILAsmParser.ParseMethodReference("vararg void Bar()", P));
         }
+
+        [Test]
+        public static void Special_method_names([Values(".ctor", ".cctor")] string specialName)
+        {
+            var method = ILAsmParser.ParseMethodReference("void Foo::" + specialName + "()", P);
+
+            method.ReturnType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Void));
+
+            method.DeclaringType.ShouldBe(P.GetTypeFromReference(null, null, "", "Foo"));
+
+            method.MethodName.ShouldBe(specialName);
+        }
+
+        [Test]
+        public static void Dotted_method_name()
+        {
+            var method = ILAsmParser.ParseMethodReference("void Foo::This.Is.Legal()", P);
+
+            method.ReturnType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Void));
+
+            method.DeclaringType.ShouldBe(P.GetTypeFromReference(null, null, "", "Foo"));
+
+            method.MethodName.ShouldBe("This.Is.Legal");
+        }
     }
 }

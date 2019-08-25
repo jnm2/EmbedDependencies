@@ -107,10 +107,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 throw new NotSupportedException($"The {nameof(MethodReference<TType>)} type does not support method references without the type spec and '::' token.");
             }
 
-            next = lexer.Lex(ref span);
-            if (next.Kind != SyntaxKind.Identifier)
-                throw new FormatException("Expected identifier following '::'.");
-            var methodName = (string)next.Value;
+            var methodName = ParseMethodName(ref span);
 
             return new MethodReference<TType>(
                 instance,
@@ -120,6 +117,56 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 methodName,
                 genericArguments: Array.Empty<TType>(),
                 parameters: Array.Empty<TType>());
+        }
+
+        private string ParseMethodName(ref StringSpan span)
+        {
+            // See ECMA 335 page 179, II.15.4 'Defining methods'
+
+            // MethodName ::=
+            //   .cctor
+            // | .ctor
+            // | <DottedName>
+
+            switch (lexer.PeekKind(ref span))
+            {
+                case SyntaxKind.DotCctorKeyword:
+                    lexer.DiscardPeekedToken();
+                    return ".cctor";
+
+                case SyntaxKind.DotCtorKeyword:
+                    lexer.DiscardPeekedToken();
+                    return ".ctor";
+
+                case SyntaxKind.Identifier:
+                    return ParseDottedName(ref span);
+
+                default:
+                    throw new FormatException("Expected '.cctor', '.ctor', or identifier following '::'.");
+            }
+        }
+
+        private string ParseDottedName(ref StringSpan span)
+        {
+            // See ECMA 335 page 110, II.5.3 'Identifiers'
+
+            // DottedName ::= <Id> [ '.' <Id> ]*
+
+            var parts = new List<string>();
+
+            while (true)
+            {
+                var next = lexer.Lex(ref span);
+                if (next.Kind != SyntaxKind.Identifier)
+                    throw new FormatException("Expected identifier.");
+
+                parts.Add((string)next.Value);
+
+                if (lexer.PeekKind(ref span) != SyntaxKind.DotToken) break;
+                lexer.DiscardPeekedToken();
+            }
+
+            return string.Join(".", parts);
         }
 
         private void ParseCallingConvention(ref StringSpan span, out bool isInstance, out bool isInstanceExplicit)
@@ -448,8 +495,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             switch (next.Kind)
             {
                 case SyntaxKind.OpenSquareToken:
-                    next = lexer.Lex(ref span);
-                    switch (next.Kind)
+                    switch (lexer.PeekKind(ref span))
                     {
                         case SyntaxKind.Identifier:
                             break;
@@ -461,32 +507,11 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                             throw new FormatException("Expected identifier or '.module' to follow '['.");
                     }
 
-                    var assemblyNameParts = new List<string> { (string)next.Value };
+                    assemblyName = ParseDottedName(ref span);
 
-                    while (true)
-                    {
-                        next = lexer.Lex(ref span);
-                        switch (next.Kind)
-                        {
-                            case SyntaxKind.CloseSquareToken:
-                                break;
-
-                            case SyntaxKind.DotToken:
-                                next = lexer.Lex(ref span);
-                                if (next.Kind != SyntaxKind.Identifier)
-                                    throw new FormatException("Expected identifier to follow '.'.");
-
-                                assemblyNameParts.Add((string)next.Value);
-                                continue;
-
-                            default:
-                                throw new FormatException("Expected '.' or ']' to follow identifier.");
-                        }
-
-                        break;
-                    }
-
-                    assemblyName = string.Join(".", assemblyNameParts);
+                    next = lexer.Lex(ref span);
+                    if (next.Kind != SyntaxKind.CloseSquareToken)
+                        throw new FormatException("Expected '.' or ']' to follow identifier.");
 
                     next = lexer.Lex(ref span);
                     if (next.Kind != SyntaxKind.Identifier)
@@ -534,44 +559,16 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
         private IReadOnlyList<string> ParseNestedNames(ref StringSpan span)
         {
-            var isSlashTokenPeeked = true;
             var nestedNames = new List<string>();
 
-            while (isSlashTokenPeeked)
+            do
             {
                 lexer.DiscardPeekedToken();
-                isSlashTokenPeeked = false;
-
-                var next = lexer.Lex(ref span);
-                if (next.Kind != SyntaxKind.Identifier)
-                    throw new FormatException("Expected identifier to follow '/'.");
 
                 if (nestedNames is null) nestedNames = new List<string>();
-                var dottedSegments = new List<string> { (string)next.Value };
-
-                while (true)
-                {
-                    switch (lexer.PeekKind(ref span))
-                    {
-                        case SyntaxKind.DotToken:
-                            lexer.DiscardPeekedToken();
-                            next = lexer.Lex(ref span);
-                            if (next.Kind != SyntaxKind.Identifier)
-                                throw new FormatException("Expected identifier to follow '.'.");
-
-                            dottedSegments.Add((string)next.Value);
-                            continue;
-
-                        case SyntaxKind.SlashToken:
-                            isSlashTokenPeeked = true;
-                            break;
-                    }
-
-                    break;
-                }
-
-                nestedNames.Add(string.Join(".", dottedSegments));
+                nestedNames.Add(ParseDottedName(ref span));
             }
+            while (lexer.PeekKind(ref span) == SyntaxKind.SlashToken);
 
             return nestedNames;
         }

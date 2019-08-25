@@ -112,6 +112,8 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         span = span.Slice(1);
                         return
                             TryRead(ref span, "..") ? SyntaxKind.EllipsisToken :
+                            TryRead(ref span, "cctor") ? SyntaxKind.DotCctorKeyword :
+                            TryRead(ref span, "ctor") ? SyntaxKind.DotCtorKeyword :
                             TryRead(ref span, "module") ? SyntaxKind.DotModuleKeyword :
                             SyntaxKind.DotToken;
 

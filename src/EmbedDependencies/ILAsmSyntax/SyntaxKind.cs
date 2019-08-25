@@ -27,6 +27,8 @@
         CharKeyword,
         ClassKeyword,
         DefaultKeyword,
+        DotCctorKeyword,
+        DotCtorKeyword,
         DotModuleKeyword,
         ExplicitKeyword,
         Float32Keyword,
