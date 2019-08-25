@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Techsola.EmbedDependencies.ILAsmSyntax
 {
@@ -13,6 +14,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
     internal sealed class ILAsmSyntaxTypeNameDecoder<TType>
     {
         private readonly IILAsmTypeNameSyntaxTypeProvider<TType> provider;
+        private readonly ILAsmLexer lexer = new ILAsmLexer();
 
         public ILAsmSyntaxTypeNameDecoder(IILAsmTypeNameSyntaxTypeProvider<TType> provider)
         {
@@ -31,7 +33,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
             while (true)
             {
-                var next = ILAsmLexer.Lex(ref span);
+                var next = lexer.Lex(ref span);
 
                 switch (next.Kind)
                 {
@@ -58,7 +60,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
         private TType ParseBeginning(ref StringSpan span)
         {
-            var next = ILAsmLexer.Lex(ref span);
+            var next = lexer.Lex(ref span);
 
             switch (next.Kind)
             {
@@ -66,7 +68,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 case SyntaxKind.DoubleExclamationToken:
                     var isMethod = next.Kind == SyntaxKind.DoubleExclamationToken;
 
-                    next = ILAsmLexer.Lex(ref span);
+                    next = lexer.Lex(ref span);
                     if (next.Kind != SyntaxKind.NumericLiteralToken)
                     {
                         var syntax = isMethod ? "!!" : "!";
@@ -88,15 +90,48 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 case SyntaxKind.ClassKeyword:
                 case SyntaxKind.ValueTypeKeyword:
                     var isValueType = next.Kind == SyntaxKind.ValueTypeKeyword;
+                    string topLevelTypeName;
+                    var namespaceSegments = new List<string>();
 
-                    next = ILAsmLexer.Lex(ref span);
-                    if (next.Kind != SyntaxKind.Identifier)
+                    next = lexer.Lex(ref span);
+                    switch (next.Kind)
                     {
-                        var syntax = isValueType ? "valuetype" : "class";
-                        throw new FormatException($"Expected identifier to follow '{syntax}'.");
+                        case SyntaxKind.OpenSquareToken:
+                            throw new NotImplementedException();
+
+                        case SyntaxKind.Identifier:
+                            topLevelTypeName = (string)next.Value;
+                            break;
+
+                        default:
+                            var syntax = isValueType ? "valuetype" : "class";
+                            throw new FormatException($"Expected identifier or '[' to follow '{syntax}'.");
+
                     }
 
-                    return provider.GetUserDefinedType(isValueType, null, "", (string)next.Value, Array.Empty<string>());
+                    while (true)
+                    {
+                        switch (lexer.PeekKind(ref span))
+                        {
+                            case SyntaxKind.DotToken:
+                                lexer.DiscardPeekedToken();
+
+                                next = lexer.Lex(ref span);
+                                if (next.Kind != SyntaxKind.Identifier)
+                                    throw new FormatException($"Expected identifier to follow '.'.");
+
+                                namespaceSegments.Add(topLevelTypeName);
+                                topLevelTypeName = (string)next.Value;
+                                continue;
+
+                            case SyntaxKind.SlashToken:
+                                throw new NotImplementedException();
+                        }
+
+                        break;
+                    }
+
+                    return provider.GetUserDefinedType(isValueType, null, string.Join(".", namespaceSegments), topLevelTypeName, Array.Empty<string>());
 
                 case SyntaxKind.Float32Keyword:
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Single);
@@ -117,14 +152,14 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Int64);
 
                 case SyntaxKind.NativeKeyword:
-                    next = ILAsmLexer.Lex(ref span);
+                    next = lexer.Lex(ref span);
                     switch (next.Kind)
                     {
                         case SyntaxKind.IntKeyword:
                             return provider.GetPrimitiveType(PrimitiveTypeCode.IntPtr);
 
                         case SyntaxKind.UnsignedKeyword:
-                            next = ILAsmLexer.Lex(ref span);
+                            next = lexer.Lex(ref span);
                             if (next.Kind != SyntaxKind.IntKeyword)
                                 throw new FormatException("Expected 'int' to follow 'native unsigned'.");
 
@@ -144,7 +179,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     return provider.GetPrimitiveType(PrimitiveTypeCode.TypedReference);
 
                 case SyntaxKind.UnsignedKeyword:
-                    next = ILAsmLexer.Lex(ref span);
+                    next = lexer.Lex(ref span);
                     switch (next.Kind)
                     {
                         case SyntaxKind.Int8Keyword:

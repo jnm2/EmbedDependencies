@@ -116,11 +116,35 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         }
 
         [Test]
-        public static void Class_reference()
+        public static void Class_with_simple_name()
         {
             AssertCallTree(
                 "class Foo",
                 P.GetUserDefinedType(isValueType: false, null, "", "Foo"));
+        }
+
+        [Test]
+        public static void Value_type_with_simple_name()
+        {
+            AssertCallTree(
+                "valuetype Foo",
+                P.GetUserDefinedType(isValueType: true, null, "", "Foo"));
+        }
+
+        [Test]
+        public static void Simple_namespace_and_name()
+        {
+            AssertCallTree(
+                "class SomeNamespace.Foo",
+                P.GetUserDefinedType(false, null, "SomeNamespace", "Foo"));
+        }
+
+        [Test]
+        public static void Dotted_namespace_and_name()
+        {
+            AssertCallTree(
+                "class Some.Namespace.With.A.Lot.Of.Dots.Foo",
+                P.GetUserDefinedType(false, null, "Some.Namespace.With.A.Lot.Of.Dots", "Foo"));
         }
     }
 }

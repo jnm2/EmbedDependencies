@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace Techsola.EmbedDependencies.ILAsmSyntax
 {
-    internal static class ILAsmLexer
+    internal sealed class ILAsmLexer
     {
         private static readonly Dictionary<string, SyntaxKind> KeywordsStartingWithPossibleIdentifierChar = new Dictionary<string, SyntaxKind>
         {
@@ -31,8 +31,32 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             ["void"] = SyntaxKind.VoidKeyword
         };
 
-        public static SyntaxToken Lex(ref StringSpan span)
+        private SyntaxToken? peekedToken;
+
+        public SyntaxKind PeekKind(ref StringSpan span)
         {
+            if (peekedToken != null) return peekedToken.Value.Kind;
+
+            var token = Lex(ref span);
+            peekedToken = token;
+            return token.Kind;
+        }
+
+        public void DiscardPeekedToken()
+        {
+            if (peekedToken is null) throw new InvalidOperationException("There is no peeked token.");
+            peekedToken = null;
+        }
+
+        public SyntaxToken Lex(ref StringSpan span)
+        {
+            if (peekedToken != null)
+            {
+                var value = peekedToken.Value;
+                peekedToken = null;
+                return value;
+            }
+
             while (span.Length > 0)
             {
                 var c = span[0];
