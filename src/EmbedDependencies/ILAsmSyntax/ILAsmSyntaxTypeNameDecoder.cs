@@ -89,49 +89,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
                 case SyntaxKind.ClassKeyword:
                 case SyntaxKind.ValueTypeKeyword:
-                    var isValueType = next.Kind == SyntaxKind.ValueTypeKeyword;
-                    string topLevelTypeName;
-                    var namespaceSegments = new List<string>();
-
-                    next = lexer.Lex(ref span);
-                    switch (next.Kind)
-                    {
-                        case SyntaxKind.OpenSquareToken:
-                            throw new NotImplementedException();
-
-                        case SyntaxKind.Identifier:
-                            topLevelTypeName = (string)next.Value;
-                            break;
-
-                        default:
-                            var syntax = isValueType ? "valuetype" : "class";
-                            throw new FormatException($"Expected identifier or '[' to follow '{syntax}'.");
-
-                    }
-
-                    while (true)
-                    {
-                        switch (lexer.PeekKind(ref span))
-                        {
-                            case SyntaxKind.DotToken:
-                                lexer.DiscardPeekedToken();
-
-                                next = lexer.Lex(ref span);
-                                if (next.Kind != SyntaxKind.Identifier)
-                                    throw new FormatException($"Expected identifier to follow '.'.");
-
-                                namespaceSegments.Add(topLevelTypeName);
-                                topLevelTypeName = (string)next.Value;
-                                continue;
-
-                            case SyntaxKind.SlashToken:
-                                throw new NotImplementedException();
-                        }
-
-                        break;
-                    }
-
-                    return provider.GetUserDefinedType(isValueType, null, string.Join(".", namespaceSegments), topLevelTypeName, Array.Empty<string>());
+                    return ParseUserDefinedType(ref span, next.Kind == SyntaxKind.ValueTypeKeyword);
 
                 case SyntaxKind.Float32Keyword:
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Single);
@@ -204,6 +162,118 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 default:
                     throw new NotImplementedException();
             }
+        }
+
+        private TType ParseUserDefinedType(ref StringSpan span, bool isValueType)
+        {
+            ParseTopLevelName(ref span,
+                isValueType,
+                out var assemblyName,
+                out var namespaceName,
+                out var topLevelTypeName,
+                out var isSlashTokenPeeked);
+
+            var nestedNames = isSlashTokenPeeked
+                ? ParseNestedNames(ref span)
+                : Array.Empty<string>();
+
+            return provider.GetUserDefinedType(
+                isValueType,
+                assemblyName,
+                namespaceName,
+                topLevelTypeName,
+                nestedNames ?? Array.Empty<string>());
+        }
+
+        private void ParseTopLevelName(ref StringSpan span, bool isValueType, out string assemblyName, out string namespaceName, out string topLevelTypeName, out bool isSlashTokenPeeked)
+        {
+            assemblyName = null;
+            var namespaceSegments = new List<string>();
+            var next = lexer.Lex(ref span);
+            switch (next.Kind)
+            {
+                case SyntaxKind.OpenSquareToken:
+                    throw new NotImplementedException();
+
+                case SyntaxKind.Identifier:
+                    topLevelTypeName = (string)next.Value;
+                    break;
+
+                default:
+                    var syntax = isValueType ? "valuetype" : "class";
+                    throw new FormatException($"Expected identifier or '[' to follow '{syntax}'.");
+            }
+
+            isSlashTokenPeeked = false;
+
+            while (true)
+            {
+                switch (lexer.PeekKind(ref span))
+                {
+                    case SyntaxKind.DotToken:
+                        lexer.DiscardPeekedToken();
+
+                        next = lexer.Lex(ref span);
+                        if (next.Kind != SyntaxKind.Identifier)
+                            throw new FormatException($"Expected identifier to follow '.'.");
+
+                        namespaceSegments.Add(topLevelTypeName);
+                        topLevelTypeName = (string)next.Value;
+                        continue;
+
+                    case SyntaxKind.SlashToken:
+                        isSlashTokenPeeked = true;
+                        break;
+                }
+
+                break;
+            }
+
+            namespaceName = string.Join(".", namespaceSegments);
+        }
+
+        private IReadOnlyList<string> ParseNestedNames(ref StringSpan span)
+        {
+            var isSlashTokenPeeked = true;
+            var nestedNames = new List<string>();
+
+            while (isSlashTokenPeeked)
+            {
+                lexer.DiscardPeekedToken();
+                isSlashTokenPeeked = false;
+
+                var next = lexer.Lex(ref span);
+                if (next.Kind != SyntaxKind.Identifier)
+                    throw new FormatException("Expected identifier to follow '/'.");
+
+                if (nestedNames is null) nestedNames = new List<string>();
+                var dottedSegments = new List<string> { (string)next.Value };
+
+                while (true)
+                {
+                    switch (lexer.PeekKind(ref span))
+                    {
+                        case SyntaxKind.DotToken:
+                            lexer.DiscardPeekedToken();
+                            next = lexer.Lex(ref span);
+                            if (next.Kind != SyntaxKind.Identifier)
+                                throw new FormatException("Expected identifier to follow '.'.");
+
+                            dottedSegments.Add((string)next.Value);
+                            continue;
+
+                        case SyntaxKind.SlashToken:
+                            isSlashTokenPeeked = true;
+                            break;
+                    }
+
+                    break;
+                }
+
+                nestedNames.Add(string.Join(".", dottedSegments));
+            }
+
+            return nestedNames;
         }
     }
 }

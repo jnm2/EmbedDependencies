@@ -146,5 +146,37 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
                 "class Some.Namespace.With.A.Lot.Of.Dots.Foo",
                 P.GetUserDefinedType(false, null, "Some.Namespace.With.A.Lot.Of.Dots", "Foo"));
         }
+
+        [Test]
+        public static void Simple_nested_name()
+        {
+            AssertCallTree(
+                "class Foo/Bar",
+                P.GetUserDefinedType(false, null, "", "Foo", new[] { "Bar" }));
+        }
+
+        [Test]
+        public static void Dotted_nested_name()
+        {
+            AssertCallTree(
+                "class Foo/This.Is.Legal",
+                P.GetUserDefinedType(false, null, "", "Foo", new[] { "This.Is.Legal" }));
+        }
+
+        [Test]
+        public static void Multi_level_nested_name()
+        {
+            AssertCallTree(
+                "class Foo/Bar/Baz",
+                P.GetUserDefinedType(false, null, "", "Foo", new[] { "Bar", "Baz" }));
+        }
+
+        [Test]
+        public static void Multi_level_nested_dotted_names()
+        {
+            AssertCallTree(
+                "class A.B.C/D.E.F/G.H.I",
+                P.GetUserDefinedType(false, null, "A.B", "C", new[] { "D.E.F", "G.H.I" }));
+        }
     }
 }
