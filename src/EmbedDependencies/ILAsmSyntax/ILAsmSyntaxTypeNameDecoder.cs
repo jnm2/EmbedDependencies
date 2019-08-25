@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Globalization;
 
 namespace Techsola.EmbedDependencies.ILAsmSyntax
 {
@@ -30,214 +29,146 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
         {
             var type = ParseBeginning(ref span);
 
-            while (TryRead(ref span, out var c))
+            while (true)
             {
-                switch (c)
+                var next = ILAsmLexer.Lex(ref span);
+
+                switch (next.Kind)
                 {
-                    case '&':
+                    case SyntaxKind.End:
+                        return type;
+
+                    case SyntaxKind.AmpersandToken:
                         type = provider.GetByReferenceType(type);
                         break;
 
-                    case '*':
+                    case SyntaxKind.AsteriskToken:
                         type = provider.GetPointerType(type);
                         break;
 
-                    case ' ':
-                        if (TryRead(ref span, "pinned"))
-                        {
-                            type = provider.GetPinnedType(type);
-                            break;
-                        }
-                        goto default;
+                    case SyntaxKind.PinnedKeyword:
+                        type = provider.GetPinnedType(type);
+                        break;
 
                     default:
                         throw new NotImplementedException();
                 }
             }
-
-            return type;
         }
 
         private TType ParseBeginning(ref StringSpan span)
         {
-            if (!TryRead(ref span, out var c))
-                throw new FormatException("Expected type.");
+            var next = ILAsmLexer.Lex(ref span);
 
-            switch (c)
+            switch (next.Kind)
             {
-                case '!':
-                    var isGenericMethodParameter = TryRead(ref span, '!');
-                    var index = ReadInt32(ref span);
+                case SyntaxKind.ExclamationToken:
+                case SyntaxKind.DoubleExclamationToken:
+                    var isMethod = next.Kind == SyntaxKind.DoubleExclamationToken;
 
-                    return isGenericMethodParameter
+                    next = ILAsmLexer.Lex(ref span);
+                    if (next.Kind != SyntaxKind.NumericLiteralToken)
+                    {
+                        var syntax = isMethod ? "!!" : "!";
+                        throw new FormatException($"Expected numeric literal to follow '{syntax}'.");
+                    }
+
+                    var index = checked((int)(uint)next.Value);
+
+                    return isMethod
                         ? provider.GetGenericMethodParameter(index)
                         : provider.GetGenericTypeParameter(index);
 
-                case 'b':
-                    // Now I know why tokenization makes sense as a first step :D
-                    if (TryRead(ref span, "ool"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Boolean);
-                    goto default;
+                case SyntaxKind.BoolKeyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.Boolean);
 
-                case 'c':
-                    if (TryRead(ref span, "har"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Char);
-                    goto default;
+                case SyntaxKind.CharKeyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.Char);
 
-                case 'f':
-                    if (TryRead(ref span, "loat32"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Single);
-                    if (TryRead(ref span, "loat64"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Double);
-                    goto default;
+                case SyntaxKind.ClassKeyword:
+                case SyntaxKind.ValueTypeKeyword:
+                    var isValueType = next.Kind == SyntaxKind.ValueTypeKeyword;
 
-                case 'i':
-                    if (TryRead(ref span, "nt8"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.SByte);
-                    if (TryRead(ref span, "nt16"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Int16);
-                    if (TryRead(ref span, "nt32"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Int32);
-                    if (TryRead(ref span, "nt64"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Int64);
-                    goto default;
+                    next = ILAsmLexer.Lex(ref span);
+                    if (next.Kind != SyntaxKind.Identifier)
+                    {
+                        var syntax = isValueType ? "valuetype" : "class";
+                        throw new FormatException($"Expected identifier to follow '{syntax}'.");
+                    }
 
-                case 'n':
-                    if (TryRead(ref span, "ative int"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.IntPtr);
-                    if (TryRead(ref span, "ative unsigned int"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.UIntPtr);
-                    goto default;
+                    return provider.GetUserDefinedType(isValueType, null, "", (string)next.Value, Array.Empty<string>());
 
-                case 'o':
-                    if (TryRead(ref span, "bject"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Object);
-                    goto default;
+                case SyntaxKind.Float32Keyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.Single);
 
-                case 's':
-                    if (TryRead(ref span, "tring"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.String);
-                    goto default;
+                case SyntaxKind.Float64Keyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.Double);
 
-                case 't':
-                    if (TryRead(ref span, "ypedref"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.TypedReference);
-                    goto default;
+                case SyntaxKind.Int8Keyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.SByte);
 
-                case 'u':
-                    if (TryRead(ref span, "nsigned int8"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Byte);
-                    if (TryRead(ref span, "nsigned int16"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.UInt16);
-                    if (TryRead(ref span, "nsigned int32"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.UInt32);
-                    if (TryRead(ref span, "nsigned int64"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.UInt64);
-                    goto default;
+                case SyntaxKind.Int16Keyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.Int16);
 
-                case 'v':
-                    if (TryRead(ref span, "oid"))
-                        return provider.GetPrimitiveType(PrimitiveTypeCode.Void);
-                    goto default;
+                case SyntaxKind.Int32Keyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.Int32);
+
+                case SyntaxKind.Int64Keyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.Int64);
+
+                case SyntaxKind.NativeKeyword:
+                    next = ILAsmLexer.Lex(ref span);
+                    switch (next.Kind)
+                    {
+                        case SyntaxKind.IntKeyword:
+                            return provider.GetPrimitiveType(PrimitiveTypeCode.IntPtr);
+
+                        case SyntaxKind.UnsignedKeyword:
+                            next = ILAsmLexer.Lex(ref span);
+                            if (next.Kind != SyntaxKind.IntKeyword)
+                                throw new FormatException("Expected 'int' to follow 'native unsigned'.");
+
+                            return provider.GetPrimitiveType(PrimitiveTypeCode.UIntPtr);
+
+                        default:
+                            throw new FormatException("Expected 'int' or 'unsigned int' to follow 'native'.");
+                    }
+
+                case SyntaxKind.ObjectKeyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.Object);
+
+                case SyntaxKind.StringKeyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.String);
+
+                case SyntaxKind.TypedReferenceKeyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.TypedReference);
+
+                case SyntaxKind.UnsignedKeyword:
+                    next = ILAsmLexer.Lex(ref span);
+                    switch (next.Kind)
+                    {
+                        case SyntaxKind.Int8Keyword:
+                            return provider.GetPrimitiveType(PrimitiveTypeCode.Byte);
+
+                        case SyntaxKind.Int16Keyword:
+                            return provider.GetPrimitiveType(PrimitiveTypeCode.UInt16);
+
+                        case SyntaxKind.Int32Keyword:
+                            return provider.GetPrimitiveType(PrimitiveTypeCode.UInt32);
+
+                        case SyntaxKind.Int64Keyword:
+                            return provider.GetPrimitiveType(PrimitiveTypeCode.UInt64);
+
+                        default:
+                            throw new FormatException("Expected 'int8', 'int16', 'int32', or 'int64' to follow 'unsigned'.");
+                    }
+
+                case SyntaxKind.VoidKeyword:
+                    return provider.GetPrimitiveType(PrimitiveTypeCode.Void);
 
                 default:
                     throw new NotImplementedException();
             }
-        }
-
-        private static bool TryRead(ref StringSpan span, out char value)
-        {
-            if (!span.IsEmpty)
-            {
-                value = span[0];
-                span = span.Slice(1);
-                return true;
-            }
-
-            value = default;
-            return false;
-        }
-
-        private static bool TryRead(ref StringSpan span, char value)
-        {
-            if (!span.StartsWith(value)) return false;
-            span = span.Slice(1);
-            return true;
-        }
-
-        private static bool TryRead(ref StringSpan span, string value)
-        {
-            if (!span.StartsWith(value)) return false;
-            span = span.Slice(value.Length);
-            return true;
-        }
-
-        private static int ReadInt32(ref StringSpan span)
-        {
-            if (TryRead(ref span, "0x"))
-            {
-                if (!TryReadHexCharSpan(ref span, out var hexSpan))
-                    throw new FormatException("Expected hexadecimal characters.");
-
-                return int.Parse(hexSpan.ToString(), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture);
-            }
-
-            if (!TryReadDecimalCharSpan(ref span, out var decimalSpan))
-                throw new FormatException("Expected decimal characters.");
-
-            return int.Parse(decimalSpan.ToString(), NumberStyles.None, CultureInfo.InvariantCulture);
-        }
-
-        private static bool TryReadDecimalCharSpan(ref StringSpan span, out StringSpan value)
-        {
-            var index = 0;
-
-            while (index < span.Length && IsDecimalChar(span[index]))
-            {
-                index++;
-            }
-
-            if (index > 0)
-            {
-                value = span.Slice(0, index);
-                span = span.Slice(index);
-                return true;
-            }
-
-            value = default;
-            return false;
-        }
-
-        private static bool IsDecimalChar(char value)
-        {
-            return '0' <= value && value <= '9';
-        }
-
-        private static bool TryReadHexCharSpan(ref StringSpan span, out StringSpan value)
-        {
-            var index = 0;
-
-            while (index < span.Length && IsHexChar(span[index]))
-            {
-                index++;
-            }
-
-            if (index > 0)
-            {
-                value = span.Slice(0, index);
-                span = span.Slice(index);
-                return true;
-            }
-
-            value = default;
-            return false;
-        }
-
-        private static bool IsHexChar(char value)
-        {
-            return ('0' <= value && value <= '9')
-                || ('A' <= value && value <= 'F')
-                || ('a' <= value && value <= 'f');
         }
     }
 }

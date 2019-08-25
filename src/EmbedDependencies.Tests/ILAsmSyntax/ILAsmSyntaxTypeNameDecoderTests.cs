@@ -91,7 +91,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         [Test]
         public static void Class_reference()
         {
-            AssertCallTree("class Foo", "GetPinnedType(GetPrimitiveType(Boolean))");
+            AssertCallTree("class Foo", "GetUserDefinedType(isValueType: false, assemblyName: null, namespaceName: \"\", topLevelTypeName: \"Foo\", nestedTypeNames: Array.Empty<string>())");
         }
     }
 }

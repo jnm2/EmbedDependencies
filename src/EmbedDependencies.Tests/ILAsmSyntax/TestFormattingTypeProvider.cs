@@ -27,7 +27,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
 
         public string GetUserDefinedType(bool isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames)
         {
-            return $"GetUserDefinedType(isValueType: {isValueType}, assemblyName: {assemblyName}, namespaceName: {namespaceName}, topLevelTypeName: {topLevelTypeName}, nestedTypeNames: {FormatArrayLiteral(nestedTypeNames)})";
+            return $"GetUserDefinedType(isValueType: {FormatBooleanLiteral(isValueType)}, assemblyName: {FormatStringLiteral(assemblyName)}, namespaceName: {FormatStringLiteral(namespaceName)}, topLevelTypeName: {FormatStringLiteral(topLevelTypeName)}, nestedTypeNames: {FormatArrayLiteral(nestedTypeNames)})";
         }
 
         public string GetByReferenceType(string elementType)
@@ -55,10 +55,20 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
             return $"GetPinnedType({elementType})";
         }
 
+        private static string FormatBooleanLiteral(bool value)
+        {
+            return value ? "true" : "false";
+        }
+
+        private static string FormatStringLiteral(string value)
+        {
+            return value is null ? "null" : '"' + value + '"';
+        }
+
         private static string FormatArrayLiteral(IReadOnlyList<string> elements)
         {
             return elements.Any()
-                ? "new[] { " + string.Join(", ", elements) + " }"
+                ? "new[] { " + string.Join(", ", elements.Select(FormatStringLiteral)) + " }"
                 : "Array.Empty<string>()";
         }
     }
