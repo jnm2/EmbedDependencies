@@ -108,19 +108,12 @@ namespace Techsola.EmbedDependencies
             IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName,
             MetadataHelper helper)
         {
-            il.Emit(OpCodes.Call, new MethodReference(
-                "get_OrdinalIgnoreCase",
-                returnType: helper.GetTypeReference("class [HasStringComparer]System.StringComparer"),
-                declaringType: helper.GetTypeReference("class [HasStringComparer]System.StringComparer")));
+            il.Emit(OpCodes.Call, helper.GetMethodReference(
+                "class [HasStringComparer]System.StringComparer class [HasStringComparer]System.StringComparer::get_OrdinalIgnoreCase()"));
 
-            il.Emit(OpCodes.Newobj, new MethodReference(
-                ".ctor",
-                returnType: dictionaryField.Module.TypeSystem.Void,
-                declaringType: dictionaryField.FieldType)
-            {
-                HasThis = true,
-                Parameters = { new ParameterDefinition(helper.GetTypeReference("class [CoreLibrary]System.Collections.Generic.IEqualityComparer`1<!0>")) }
-            });
+            il.Emit(OpCodes.Newobj, helper.GetMethodReference(
+                @"instance void class [HasCollections]System.Collections.Generic.Dictionary`2<string, string>::.ctor(
+                    class [CoreLibrary]System.Collections.Generic.IEqualityComparer`1<!0>)"));
 
             foreach (var entry in embeddedResourceNamesByAssemblyName)
             {
@@ -128,18 +121,8 @@ namespace Techsola.EmbedDependencies
                 il.Emit(OpCodes.Ldstr, entry.Key);
                 il.Emit(OpCodes.Ldstr, entry.Value);
 
-                il.Emit(OpCodes.Callvirt, new MethodReference(
-                    "set_Item",
-                    returnType: dictionaryField.Module.TypeSystem.Void,
-                    declaringType: dictionaryField.FieldType)
-                {
-                    HasThis = true,
-                    Parameters =
-                    {
-                        new ParameterDefinition(helper.GetTypeReference("!0")),
-                        new ParameterDefinition(helper.GetTypeReference("!1"))
-                    }
-                });
+                il.Emit(OpCodes.Callvirt, helper.GetMethodReference(
+                    "instance void class [HasCollections]System.Collections.Generic.Dictionary`2<string, string>::set_Item(!0, !1)"));
             }
 
             il.Emit(OpCodes.Stsfld, dictionaryField);
@@ -150,34 +133,16 @@ namespace Techsola.EmbedDependencies
             var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(module, helper);
             moduleType.Methods.Add(assemblyResolveHandler);
 
-            il.Emit(OpCodes.Call, new MethodReference(
-                "get_CurrentDomain",
-                returnType: helper.GetTypeReference("class [HasAppDomain]System.AppDomain"),
-                declaringType: helper.GetTypeReference("class [HasAppDomain]System.AppDomain")));
+            il.Emit(OpCodes.Call, helper.GetMethodReference(
+                "class [HasAppDomain]System.AppDomain class [HasAppDomain]System.AppDomain::get_CurrentDomain()"));
 
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldftn, assemblyResolveHandler);
-            il.Emit(OpCodes.Newobj, new MethodReference(
-                ".ctor",
-                returnType: module.TypeSystem.Void,
-                declaringType: helper.GetTypeReference("class [HasAppDomain]System.ResolveEventHandler"))
-            {
-                HasThis = true,
-                Parameters =
-                {
-                    new ParameterDefinition(module.TypeSystem.Object),
-                    new ParameterDefinition(module.TypeSystem.IntPtr)
-                }
-            });
+            il.Emit(OpCodes.Newobj, helper.GetMethodReference(
+                "instance void class [HasAppDomain]System.ResolveEventHandler::.ctor(object, native int)"));
 
-            il.Emit(OpCodes.Callvirt, new MethodReference(
-                "add_AssemblyResolve",
-                returnType: module.TypeSystem.Void,
-                declaringType: helper.GetTypeReference("class [HasAppDomain]System.AppDomain"))
-            {
-                HasThis = true,
-                Parameters = { new ParameterDefinition(helper.GetTypeReference("class [HasAppDomain]System.ResolveEventHandler")) }
-            });
+            il.Emit(OpCodes.Callvirt, helper.GetMethodReference(
+                "instance void class [HasAppDomain]System.AppDomain::add_AssemblyResolve(class [HasAppDomain]System.ResolveEventHandler)"));
 
             il.Emit(OpCodes.Ret);
         }
@@ -233,30 +198,15 @@ namespace Techsola.EmbedDependencies
             il.Emit(OpCodes.Ldsfld, dictionaryField);
             il.Emit(OpCodes.Ldarg_0);
 
-            il.Emit(OpCodes.Callvirt, new MethodReference(
-                "get_Name",
-                returnType: dictionaryField.Module.TypeSystem.String,
-                declaringType: helper.GetTypeReference("class System.Reflection.AssemblyName"))
-            {
-                HasThis = true
-            });
+            il.Emit(OpCodes.Callvirt, helper.GetMethodReference(
+                "instance string class System.Reflection.AssemblyName::get_Name()"));
 
             var resourceNameVariable = new VariableDefinition(dictionaryField.Module.TypeSystem.String);
             method.Body.Variables.Add(resourceNameVariable);
             il.Emit(OpCodes.Ldloca_S, resourceNameVariable);
 
-            il.Emit(OpCodes.Callvirt, new MethodReference(
-                "TryGetValue",
-                returnType: dictionaryField.Module.TypeSystem.Boolean,
-                declaringType: dictionaryField.FieldType)
-            {
-                HasThis = true,
-                Parameters =
-                {
-                    new ParameterDefinition(helper.GetTypeReference("!0")),
-                    new ParameterDefinition(helper.GetTypeReference("!1&"))
-                }
-            });
+            il.Emit(OpCodes.Callvirt, helper.GetMethodReference(
+                "instance bool class [HasCollections]System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)"));
 
             var successBranch = il.Create(OpCodes.Ldtoken, moduleType);
 
@@ -266,32 +216,16 @@ namespace Techsola.EmbedDependencies
 
             il.Append(successBranch);
 
-            il.Emit(OpCodes.Call, new MethodReference(
-                "GetTypeFromHandle",
-                returnType: helper.GetTypeReference("class System.Type"),
-                declaringType: helper.GetTypeReference("class System.Type"))
-            {
-                Parameters = { new ParameterDefinition(helper.GetTypeReference("valuetype System.RuntimeTypeHandle")) }
-            });
+            il.Emit(OpCodes.Call, helper.GetMethodReference(
+                "class System.Type System.Type::GetTypeFromHandle(valuetype System.RuntimeTypeHandle)"));
 
-            il.Emit(OpCodes.Callvirt, new MethodReference(
-                "get_Assembly",
-                returnType: helper.GetTypeReference("class System.Reflection.Assembly"),
-                declaringType: helper.GetTypeReference("class System.Type"))
-            {
-                HasThis = true
-            });
+            il.Emit(OpCodes.Callvirt, helper.GetMethodReference(
+                "instance class System.Reflection.Assembly System.Type::get_Assembly()"));
 
             il.Emit(OpCodes.Ldloc_0);
 
-            il.Emit(OpCodes.Callvirt, new MethodReference(
-                "GetManifestResourceStream",
-                returnType: helper.GetTypeReference("class [HasStream]System.IO.Stream"),
-                declaringType: helper.GetTypeReference("class System.Reflection.Assembly"))
-            {
-                HasThis = true,
-                Parameters = { new ParameterDefinition(dictionaryField.Module.TypeSystem.String) }
-            });
+            il.Emit(OpCodes.Callvirt, helper.GetMethodReference(
+                "instance class System.IO.Stream System.Reflection.Assembly::GetManifestResourceStream(string)"));
 
             il.Emit(OpCodes.Ret);
 
