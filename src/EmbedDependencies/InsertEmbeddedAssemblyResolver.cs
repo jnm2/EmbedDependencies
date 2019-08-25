@@ -75,7 +75,6 @@ namespace Techsola.EmbedDependencies
             }
 
             var importer = new MetadataImporter(module, scopesByAssemblySpec);
-
             var dictionaryField = CreateDictionaryField(moduleType, importer);
             GenerateDictionaryInitializationIL(il, dictionaryField, embeddedResourceNamesByAssemblyName, importer);
 
