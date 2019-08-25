@@ -84,7 +84,16 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
         {
             // See ECMA 335 page 513, VI.C.4.8 'Instructions that take a method as an argument'
 
-            // <callConv> <type> [ <typeSpec> :: ] <methodName> ( <parameters> )
+            // <callConv> <type> [ <typeSpec> :: ] <methodName> '(' <parameters> ')'
+
+            // Not sure why generic method arguments aren't mentioned. For comparison, see:
+            // - Page 148, II.10.3.2 'The .override directive'
+            // - Page 179, II.15.4 'Defining methods'
+            // Neither of these syntaxes is exactly relevant, but the pattern justifies this version which will be:
+
+            // <callConv> <type> [ <typeSpec> :: ] <methodName> [ '<' <GenArgs> '>' ] '(' <parameters> ')'
+
+            // GenArgs ::= <Type> [ ',', <Type> ]*
 
             var span = (StringSpan)methodReferenceSyntax;
 
@@ -108,17 +117,10 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             }
 
             var methodName = ParseMethodName(ref span);
-
+            var genericArguments = ParseGenericArguments(ref span);
             var parameters = ParseParameterList(ref span);
 
-            return new MethodReference<TType>(
-                instance,
-                instanceExplicit,
-                returnType,
-                declaringType,
-                methodName,
-                genericArguments: Array.Empty<TType>(),
-                parameters);
+            return new MethodReference<TType>(instance, instanceExplicit, returnType, declaringType, methodName, genericArguments, parameters);
         }
 
         private string ParseMethodName(ref StringSpan span)
@@ -263,6 +265,38 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             }
         }
 
+        private IReadOnlyList<TType> ParseGenericArguments(ref StringSpan span)
+        {
+            if (lexer.PeekKind(ref span) != SyntaxKind.OpenAngleToken)
+                return Array.Empty<TType>();
+
+            lexer.DiscardPeekedToken();
+
+            var arguments = new List<TType>();
+
+            while (true)
+            {
+                var result = ParseType(ref span);
+                if (!result.Value.IsSome(out var parameterType))
+                    throw new FormatException(result.PeekedTokenMessage);
+
+                arguments.Add(parameterType);
+
+                var next = lexer.Lex(ref span);
+                switch (next.Kind)
+                {
+                    case SyntaxKind.CommaToken:
+                        break;
+
+                    case SyntaxKind.CloseAngleToken:
+                        return arguments;
+
+                    default:
+                        throw new FormatException("Expected ',' or '>' to follow generic argument.");
+                }
+            }
+        }
+
         private ParseResult<TType> ParseTypeSpec(ref StringSpan span)
         {
             // See ECMA 335 page 123, II.7.1 'Types'
@@ -322,34 +356,9 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         break;
 
                     case SyntaxKind.OpenAngleToken:
-                        lexer.DiscardPeekedToken();
-                        var arguments = new List<TType>();
+                        var genericArguments = ParseGenericArguments(ref span);
 
-                        while (true)
-                        {
-                            result = ParseType(ref span);
-                            if (!result.Value.IsSome(out var argument))
-                                throw new FormatException(result.PeekedTokenMessage);
-
-                            arguments.Add(argument);
-
-                            var next = lexer.Lex(ref span);
-                            switch (next.Kind)
-                            {
-                                case SyntaxKind.CloseAngleToken:
-                                    break;
-
-                                case SyntaxKind.CommaToken:
-                                    continue;
-
-                                default:
-                                    throw new FormatException("Expected ',' or '>'.");
-                            }
-
-                            break;
-                        }
-
-                        type = provider.GetGenericInstantiation(type, arguments);
+                        type = provider.GetGenericInstantiation(type, genericArguments);
                         break;
 
                     default:

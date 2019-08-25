@@ -581,5 +581,44 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         {
             Should.Throw<NotSupportedException>(() => ILAsmParser.ParseMethodReference("void Foo::Bar(...)", P));
         }
+
+        [Test]
+        public static void Generic_method_instantiation()
+        {
+            var method = ILAsmParser.ParseMethodReference("class Foo`1/Bar`1<!0, !1> class Foo`1/Bar`1<bool, int32>::MethodName<!1, string>(!0, !1, !!0)", P);
+
+            method.ReturnType.ShouldBe(
+                P.GetGenericInstantiation(
+                    P.GetTypeFromReference(false, null, "", "Foo`1", new[] { "Bar`1" }),
+                    new[]
+                    {
+                        P.GetGenericTypeParameter(0),
+                        P.GetGenericTypeParameter(1)
+                    }));
+
+            method.DeclaringType.ShouldBe(
+                P.GetGenericInstantiation(
+                    P.GetTypeFromReference(false, null, "", "Foo`1", new[] { "Bar`1" }),
+                    new[]
+                    {
+                        P.GetPrimitiveType(PrimitiveTypeCode.Boolean),
+                        P.GetPrimitiveType(PrimitiveTypeCode.Int32)
+                    }));
+
+            method.MethodName.ShouldBe("MethodName");
+
+            method.GenericArguments.ShouldBe(new[]
+            {
+                P.GetGenericTypeParameter(1),
+                P.GetPrimitiveType(PrimitiveTypeCode.String)
+            });
+
+            method.Parameters.ShouldBe(new[]
+            {
+                P.GetGenericTypeParameter(0),
+                P.GetGenericTypeParameter(1),
+                P.GetGenericMethodParameter(0)
+            });
+        }
     }
 }
