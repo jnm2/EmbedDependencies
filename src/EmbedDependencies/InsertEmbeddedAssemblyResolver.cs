@@ -34,17 +34,28 @@ namespace Techsola.EmbedDependencies
                 ["Foo"] = @"Assemblies\Foo.dll"
             };
 
-            CreateModuleInitializer(assemblyDefinition.MainModule, embeddedResourceNamesByAssemblyName);
+            var module = assemblyDefinition.MainModule;
+            var helper = InitializeMetadataHelper(module);
+
+            var moduleType = module.GetType("<Module>");
+
+            var dictionaryField = CreateDictionaryField(helper);
+            moduleType.Fields.Add(dictionaryField);
+
+            var getResourceAssemblyStreamOrNullMethod = CreateGetResourceAssemblyStreamOrNullMethod(dictionaryField, moduleType, helper);
+            moduleType.Methods.Add(getResourceAssemblyStreamOrNullMethod);
+
+            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(helper);
+            moduleType.Methods.Add(assemblyResolveHandler);
+
+            var moduleInitializer = CreateModuleInitializer(dictionaryField, embeddedResourceNamesByAssemblyName, assemblyResolveHandler, helper);
+            moduleType.Methods.Add(moduleInitializer);
 
             assemblyDefinition.Write(stream);
         }
 
-        private static void CreateModuleInitializer(ModuleDefinition module, IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName)
+        private static MetadataHelper InitializeMetadataHelper(ModuleDefinition module)
         {
-            var moduleType = module.GetType("<Module>");
-
-            var moduleInitializer = new MethodDefinition(".cctor", MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-
             var parts = GetTargetFramework(module.Assembly)?.Split(',');
             var frameworkName = parts?[0];
             var version = parts is null ? null : Version.Parse(parts[1].Substring("Version=v".Length));
@@ -70,23 +81,27 @@ namespace Techsola.EmbedDependencies
                     throw new NotSupportedException("Versions of .NET Standard older than 2.0 are not supported.");
             }
 
-            var helper = new MetadataHelper(module, scopesByAssemblyMoniker);
-            var emit = helper.GetEmitHelper(moduleInitializer);
+            return new MetadataHelper(module, scopesByAssemblyMoniker);
+        }
 
-            var dictionaryField = CreateDictionaryField(helper);
-            moduleType.Fields.Add(dictionaryField);
+        private static MethodDefinition CreateModuleInitializer(
+            FieldDefinition dictionaryField,
+            IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName,
+            MethodDefinition assemblyResolveHandler,
+            MetadataHelper helper)
+        {
+            var moduleInitializer = new MethodDefinition(
+                ".cctor",
+                MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+                helper.GetTypeReference("void"));
+
+            var emit = helper.GetEmitHelper(moduleInitializer);
 
             GenerateDictionaryInitializationIL(emit, dictionaryField, embeddedResourceNamesByAssemblyName);
 
-            var getResourceAssemblyStreamOrNullMethod = CreateGetResourceAssemblyStreamOrNullMethod(dictionaryField, moduleType, helper);
-            moduleType.Methods.Add(getResourceAssemblyStreamOrNullMethod);
-
-            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(helper);
-            moduleType.Methods.Add(assemblyResolveHandler);
-
             GenerateAppDomainModuleInitializerIL(emit, assemblyResolveHandler);
 
-            moduleType.Methods.Add(moduleInitializer);
+            return moduleInitializer;
         }
 
         private static AssemblyNameReference GetOrAddAssemblyReference(ModuleDefinition module, string assemblyName)
