@@ -187,15 +187,60 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
         private void ParseTopLevelName(ref StringSpan span, bool isValueType, out string assemblyName, out string namespaceName, out string topLevelTypeName, out bool isSlashTokenPeeked)
         {
-            assemblyName = null;
             var namespaceSegments = new List<string>();
             var next = lexer.Lex(ref span);
             switch (next.Kind)
             {
                 case SyntaxKind.OpenSquareToken:
-                    throw new NotImplementedException();
+                    next = lexer.Lex(ref span);
+                    switch (next.Kind)
+                    {
+                        case SyntaxKind.Identifier:
+                            break;
+
+                        case SyntaxKind.DotModuleKeyword:
+                            throw new NotSupportedException($"'.module' syntax is not currently supported by {nameof(IILAsmTypeNameSyntaxTypeProvider<TType>)}.");
+
+                        default:
+                            throw new FormatException("Expected identifier or '.module' to follow '['.");
+                    }
+
+                    var assemblyNameParts = new List<string> { (string)next.Value };
+
+                    while (true)
+                    {
+                        next = lexer.Lex(ref span);
+                        switch (next.Kind)
+                        {
+                            case SyntaxKind.CloseSquareToken:
+                                break;
+
+                            case SyntaxKind.DotToken:
+                                next = lexer.Lex(ref span);
+                                if (next.Kind != SyntaxKind.Identifier)
+                                    throw new FormatException("Expected identifier to follow '.'.");
+
+                                assemblyNameParts.Add((string)next.Value);
+                                continue;
+
+                            default:
+                                throw new FormatException("Expected '.' or ']' to follow identifier.");
+                        }
+
+                        break;
+                    }
+
+                    assemblyName = string.Join(".", assemblyNameParts);
+
+                    next = lexer.Lex(ref span);
+                    if (next.Kind != SyntaxKind.Identifier)
+                        throw new FormatException("Expected identifier to follow ']'.");
+
+                    topLevelTypeName = (string)next.Value;
+                    break;
 
                 case SyntaxKind.Identifier:
+                    assemblyName = null;
                     topLevelTypeName = (string)next.Value;
                     break;
 

@@ -8,11 +8,15 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
     public static class ILAsmSyntaxTypeNameDecoderTests
     {
         private static readonly TestFormattingTypeProvider P = TestFormattingTypeProvider.Instance;
-        private static readonly string[] Empty = Array.Empty<string>();
 
         private static void AssertCallTree(string syntax, string expected)
         {
             ILAsmSyntaxTypeNameDecoder.Decode(syntax, P).ShouldBe(expected);
+        }
+
+        private static T AssertException<T>(string syntax) where T : Exception
+        {
+            return Should.Throw<T>(() => ILAsmSyntaxTypeNameDecoder.Decode(syntax, P));
         }
 
         [Test]
@@ -177,6 +181,45 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
             AssertCallTree(
                 "class A.B.C/D.E.F/G.H.I",
                 P.GetUserDefinedType(false, null, "A.B", "C", new[] { "D.E.F", "G.H.I" }));
+        }
+
+        [Test]
+        public static void Class_with_simple_assembly()
+        {
+            AssertCallTree(
+                "class [a]Foo",
+                P.GetUserDefinedType(isValueType: false, "a", "", "Foo"));
+        }
+
+        [Test]
+        public static void Value_type_with_simple_assembly()
+        {
+            AssertCallTree(
+                "valuetype [a]Foo",
+                P.GetUserDefinedType(isValueType: true, "a", "", "Foo"));
+        }
+
+        [Test]
+        public static void Assembly_with_dotted_name()
+        {
+            AssertCallTree(
+                "class [a.b.c]Foo",
+                P.GetUserDefinedType(isValueType: false, "a.b.c", "", "Foo"));
+        }
+
+        [Test]
+        public static void Assembly_with_dotted_name_and_namespace()
+        {
+            AssertCallTree(
+                "class [a.b.c]D.E.F",
+                P.GetUserDefinedType(isValueType: false, "a.b.c", "D.E", "F"));
+        }
+
+        [Test]
+        public static void Netmodule_is_not_supported()
+        {
+            AssertException<NotSupportedException>(
+                "class [.module foo.netmodule]Foo");
         }
     }
 }
