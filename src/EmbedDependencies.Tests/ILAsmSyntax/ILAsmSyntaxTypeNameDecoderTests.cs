@@ -1,50 +1,66 @@
 ﻿using NUnit.Framework;
 using Shouldly;
+using System;
 using Techsola.EmbedDependencies.ILAsmSyntax;
 
 namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
 {
     public static class ILAsmSyntaxTypeNameDecoderTests
     {
+        private static readonly TestFormattingTypeProvider P = TestFormattingTypeProvider.Instance;
+        private static readonly string[] Empty = Array.Empty<string>();
+
         private static void AssertCallTree(string syntax, string expected)
         {
-            ILAsmSyntaxTypeNameDecoder.Decode(syntax, TestFormattingTypeProvider.Instance).ShouldBe(expected);
+            ILAsmSyntaxTypeNameDecoder.Decode(syntax, P).ShouldBe(expected);
         }
 
         [Test]
         public static void Generic_type_parameter([Values(0, 1, int.MaxValue)] int index)
         {
-            AssertCallTree($"!{index}", $"GetGenericTypeParameter({index})");
+            AssertCallTree(
+                $"!{index}",
+                P.GetGenericTypeParameter(index));
         }
 
         [Test]
         public static void Generic_type_parameter_using_lowercase_hex([Values(0, 1, int.MaxValue)] int index)
         {
-            AssertCallTree($"!0x{index:x}", $"GetGenericTypeParameter({index})");
+            AssertCallTree(
+                $"!0x{index:x}",
+                P.GetGenericTypeParameter(index));
         }
 
         [Test]
         public static void Generic_type_parameter_using_uppercase_hex([Values(0, 1, int.MaxValue)] int index)
         {
-            AssertCallTree($"!0x{index:X}", $"GetGenericTypeParameter({index})");
+            AssertCallTree(
+                $"!0x{index:X}",
+                P.GetGenericTypeParameter(index));
         }
 
         [Test]
         public static void Generic_method_parameter([Values(0, 1, int.MaxValue)] int index)
         {
-            AssertCallTree($"!!{index}", $"GetGenericMethodParameter({index})");
+            AssertCallTree(
+                $"!!{index}",
+                P.GetGenericMethodParameter(index));
         }
 
         [Test]
         public static void Generic_method_parameter_using_lowercase_hex([Values(0, 1, int.MaxValue)] int index)
         {
-            AssertCallTree($"!!0x{index:x}", $"GetGenericMethodParameter({index})");
+            AssertCallTree(
+                $"!!0x{index:x}",
+                P.GetGenericMethodParameter(index));
         }
 
         [Test]
         public static void Generic_method_parameter_using_uppercase_hex([Values(0, 1, int.MaxValue)] int index)
         {
-            AssertCallTree($"!!0x{index:X}", $"GetGenericMethodParameter({index})");
+            AssertCallTree(
+                $"!!0x{index:X}",
+                P.GetGenericMethodParameter(index));
         }
 
         [TestCase("bool", PrimitiveTypeCode.Boolean)]
@@ -67,31 +83,44 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         [TestCase("void", PrimitiveTypeCode.Void)]
         public static void Primitives(string primitiveSyntax, PrimitiveTypeCode typeCode)
         {
-            AssertCallTree(primitiveSyntax, $"GetPrimitiveType({typeCode})");
+            AssertCallTree(
+                primitiveSyntax,
+                P.GetPrimitiveType(typeCode));
         }
 
         [Test]
         public static void By_reference()
         {
-            AssertCallTree("bool&", "GetByReferenceType(GetPrimitiveType(Boolean))");
+            AssertCallTree(
+                "bool&",
+                P.GetByReferenceType(
+                    P.GetPrimitiveType(PrimitiveTypeCode.Boolean)));
         }
 
         [Test]
         public static void Pointer()
         {
-            AssertCallTree("bool*", "GetPointerType(GetPrimitiveType(Boolean))");
+            AssertCallTree(
+                "bool*",
+                P.GetPointerType(
+                    P.GetPrimitiveType(PrimitiveTypeCode.Boolean)));
         }
 
         [Test]
         public static void Pinned()
         {
-            AssertCallTree("bool pinned", "GetPinnedType(GetPrimitiveType(Boolean))");
+            AssertCallTree(
+                "bool pinned",
+                P.GetPinnedType(
+                    P.GetPrimitiveType(PrimitiveTypeCode.Boolean)));
         }
 
         [Test]
         public static void Class_reference()
         {
-            AssertCallTree("class Foo", "GetUserDefinedType(isValueType: false, assemblyName: null, namespaceName: \"\", topLevelTypeName: \"Foo\", nestedTypeNames: Array.Empty<string>())");
+            AssertCallTree(
+                "class Foo",
+                P.GetUserDefinedType(isValueType: false, null, "", "Foo"));
         }
     }
 }

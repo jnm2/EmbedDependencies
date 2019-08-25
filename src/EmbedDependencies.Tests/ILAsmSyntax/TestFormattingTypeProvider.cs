@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Techsola.EmbedDependencies.ILAsmSyntax;
 
@@ -25,8 +26,9 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
             return $"GetPrimitiveType({typeCode})";
         }
 
-        public string GetUserDefinedType(bool isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames)
+        public string GetUserDefinedType(bool isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames = null)
         {
+            if (nestedTypeNames is null) nestedTypeNames = Array.Empty<string>();
             return $"GetUserDefinedType(isValueType: {FormatBooleanLiteral(isValueType)}, assemblyName: {FormatStringLiteral(assemblyName)}, namespaceName: {FormatStringLiteral(namespaceName)}, topLevelTypeName: {FormatStringLiteral(topLevelTypeName)}, nestedTypeNames: {FormatArrayLiteral(nestedTypeNames)})";
         }
 
