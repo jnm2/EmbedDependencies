@@ -17,6 +17,11 @@ namespace Techsola.EmbedDependencies
             this.scopesByAssemblyMoniker = scopesByAssemblyMoniker ?? throw new ArgumentNullException(nameof(scopesByAssemblyMoniker));
         }
 
+        public EmitHelper GetEmitHelper(MethodDefinition methodDefinition)
+        {
+            return new EmitHelper(this, methodDefinition.Body.GetILProcessor());
+        }
+
         public TypeReference GetTypeReference(string ilasmSyntax)
         {
             return ILAsmParser.ParseType(ilasmSyntax, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
@@ -57,11 +62,6 @@ namespace Techsola.EmbedDependencies
             return scopesByAssemblyMoniker.TryGetValue(assemblyName, out var scope)
                 ? scope
                 : throw new InvalidOperationException($"Assembly moniker '{assemblyName}' must be added to the dictionary before parsing.");
-        }
-
-        public EmitHelper this[MethodDefinition methodDefinition]
-        {
-            get => new EmitHelper(this, methodDefinition.Body.GetILProcessor());
         }
     }
 }
