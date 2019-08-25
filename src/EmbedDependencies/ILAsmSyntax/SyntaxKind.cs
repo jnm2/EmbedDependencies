@@ -18,14 +18,22 @@
         DotToken,
         EllipsisToken,
         SlashToken,
+        DoubleColonToken,
         NumericLiteralToken,
         StringLiteralToken,
+
+        // If keyword entries change, update ILAsmLexer.KeywordsStartingWithPossibleIdentifierChar.
         BoolKeyword,
         CharKeyword,
         ClassKeyword,
+        DefaultKeyword,
+        DotCctorKeyword,
+        DotCtorKeyword,
         DotModuleKeyword,
+        ExplicitKeyword,
         Float32Keyword,
         Float64Keyword,
+        InstanceKeyword,
         IntKeyword,
         Int8Keyword,
         Int16Keyword,
@@ -39,9 +47,12 @@
         PinnedKeyword,
         StringKeyword,
         TypedReferenceKeyword,
+        UnmanagedKeyword,
         UnsignedKeyword,
         ValueTypeKeyword,
+        VarargKeyword,
         VoidKeyword,
+
         Identifier
     }
 }

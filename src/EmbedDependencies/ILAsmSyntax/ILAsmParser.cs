@@ -5,9 +5,19 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 {
     public static class ILAsmParser
     {
-        public static TType Parse<TType>(string typeSyntax, IILAsmTypeSyntaxTypeProvider<TType> provider)
+        public static TType ParseType<TType>(string typeSyntax, IILAsmTypeSyntaxTypeProvider<TType> provider)
         {
-            return new ILAsmParser<TType>(provider).Parse(typeSyntax);
+            return new ILAsmParser<TType>(provider).ParseType(typeSyntax);
+        }
+
+        public static FieldReference<TType> ParseFieldReference<TType>(string fieldReferenceSyntax, IILAsmTypeSyntaxTypeProvider<TType> provider)
+        {
+            return new ILAsmParser<TType>(provider).ParseFieldReference(fieldReferenceSyntax);
+        }
+
+        public static MethodReference<TType> ParseMethodReference<TType>(string methodReferenceSyntax, IILAsmTypeSyntaxTypeProvider<TType> provider)
+        {
+            return new ILAsmParser<TType>(provider).ParseMethodReference(methodReferenceSyntax);
         }
     }
 
@@ -21,85 +31,338 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
         }
 
-        public TType Parse(string typeSyntax)
+        public TType ParseType(string typeSyntax)
         {
             var span = (StringSpan)typeSyntax;
 
             var result = ParseType(ref span);
 
-            if (result.UnusedToken != null)
+            if (result.PeekedTokenMessage != null)
             {
-                if (result.UnusedToken.Value.Kind == SyntaxKind.End)
+                if (lexer.PeekedTokenKind == SyntaxKind.End)
                     throw new ArgumentException("Type syntax must be specified.", nameof(typeSyntax));
 
-                throw new FormatException(result.UnusedTokenMessage);
+                throw new FormatException(result.PeekedTokenMessage);
             }
 
             return result.Value.Value;
         }
 
+        public FieldReference<TType> ParseFieldReference(string fieldReferenceSyntax)
+        {
+            // See ECMA 335 page 513, VI.C.4.9 'Instructions that take a field of a class as an argument'
+
+            // <type> <typeSpec> :: <id>
+
+            var span = (StringSpan)fieldReferenceSyntax;
+
+            var result = ParseType(ref span);
+            if (!result.Value.IsSome(out var fieldType))
+            {
+                if (lexer.PeekedTokenKind == SyntaxKind.End)
+                    throw new ArgumentException("Field reference syntax must be specified.", nameof(fieldReferenceSyntax));
+
+                throw new FormatException(result.PeekedTokenMessage);
+            }
+
+            result = ParseTypeSpec(ref span);
+            if (!result.Value.IsSome(out var declaringType))
+                throw new FormatException(result.PeekedTokenMessage);
+
+            var next = lexer.Lex(ref span);
+            if (next.Kind != SyntaxKind.DoubleColonToken)
+                throw new FormatException("Expected '::' following type spec.");
+
+            next = lexer.Lex(ref span);
+            if (next.Kind != SyntaxKind.Identifier)
+                throw new FormatException("Expected identifier following '::'.");
+
+            return new FieldReference<TType>(fieldType, declaringType, (string)next.Value);
+        }
+
+        public MethodReference<TType> ParseMethodReference(string methodReferenceSyntax)
+        {
+            // See ECMA 335 page 513, VI.C.4.8 'Instructions that take a method as an argument'
+
+            // <callConv> <type> [ <typeSpec> :: ] <methodName> '(' <parameters> ')'
+
+            // Not sure why generic method arguments aren't mentioned. For comparison, see:
+            // - Page 148, II.10.3.2 'The .override directive'
+            // - Page 179, II.15.4 'Defining methods'
+            // Neither of these syntaxes is exactly relevant, but the pattern justifies this version which will be:
+
+            // <callConv> <type> [ <typeSpec> :: ] <methodName> [ '<' <GenArgs> '>' ] '(' <parameters> ')'
+
+            // GenArgs ::= <Type> [ ',', <Type> ]*
+
+            var span = (StringSpan)methodReferenceSyntax;
+
+            if (lexer.PeekKind(ref span) == SyntaxKind.End)
+                throw new ArgumentException("Method reference syntax must be specified.", nameof(methodReferenceSyntax));
+
+            ParseCallingConvention(ref span, out var instance, out var instanceExplicit);
+
+            var result = ParseType(ref span);
+            if (!result.Value.IsSome(out var returnType))
+                throw new FormatException(result.PeekedTokenMessage);
+
+            result = ParseTypeSpec(ref span);
+            if (!result.Value.IsSome(out var declaringType))
+                throw new FormatException(result.PeekedTokenMessage);
+
+            var next = lexer.Lex(ref span);
+            if (next.Kind != SyntaxKind.DoubleColonToken)
+            {
+                throw new NotSupportedException($"The {nameof(MethodReference<TType>)} type does not support method references without the type spec and '::' token.");
+            }
+
+            var methodName = ParseMethodName(ref span);
+            var genericArguments = ParseGenericArguments(ref span);
+            var parameters = ParseParameterList(ref span);
+
+            return new MethodReference<TType>(instance, instanceExplicit, returnType, declaringType, methodName, genericArguments, parameters);
+        }
+
+        private string ParseMethodName(ref StringSpan span)
+        {
+            // See ECMA 335 page 179, II.15.4 'Defining methods'
+
+            // MethodName ::=
+            //   .cctor
+            // | .ctor
+            // | <DottedName>
+
+            switch (lexer.PeekKind(ref span))
+            {
+                case SyntaxKind.DotCctorKeyword:
+                    lexer.DiscardPeekedToken();
+                    return ".cctor";
+
+                case SyntaxKind.DotCtorKeyword:
+                    lexer.DiscardPeekedToken();
+                    return ".ctor";
+
+                case SyntaxKind.Identifier:
+                    return ParseDottedName(ref span);
+
+                default:
+                    throw new FormatException("Expected '.cctor', '.ctor', or identifier following '::'.");
+            }
+        }
+
+        private IReadOnlyList<TType> ParseParameterList(ref StringSpan span)
+        {
+            var next = lexer.Lex(ref span);
+            if (next.Kind != SyntaxKind.OpenParenToken)
+                throw new FormatException("Expected '(' to follow method name.");
+
+            // See ECMA 335 page 179, II.15.4 'Defining methods'
+
+            // Parameters ::= [ <Param> [ ',' <Param> ]* ]
+
+            // Param ::=
+            //   ...
+            // | [ <ParamAttr>* ] <Type> [ marshal '(' [ <NativeType> ] ')' ] [ Id ]
+
+            switch (lexer.PeekKind(ref span))
+            {
+                case SyntaxKind.CloseParenToken:
+                    return Array.Empty<TType>();
+
+                case SyntaxKind.EllipsisToken:
+                    throw new NotSupportedException($"The {nameof(MethodReference<TType>)} type does not support varargs calls.");
+            }
+
+            var parameters = new List<TType>();
+
+            while (true)
+            {
+                var result = ParseType(ref span);
+                if (!result.Value.IsSome(out var parameterType))
+                    throw new FormatException(result.PeekedTokenMessage);
+
+                parameters.Add(parameterType);
+
+                next = lexer.Lex(ref span);
+                switch (next.Kind)
+                {
+                    case SyntaxKind.CommaToken:
+                        break;
+
+                    case SyntaxKind.CloseParenToken:
+                        return parameters;
+
+                    default:
+                        throw new FormatException("Expected ',' or ')' to follow method parameter type.");
+                }
+            }
+        }
+
+        private string ParseDottedName(ref StringSpan span)
+        {
+            // See ECMA 335 page 110, II.5.3 'Identifiers'
+
+            // DottedName ::= <Id> [ '.' <Id> ]*
+
+            var parts = new List<string>();
+
+            while (true)
+            {
+                var next = lexer.Lex(ref span);
+                if (next.Kind != SyntaxKind.Identifier)
+                    throw new FormatException("Expected identifier.");
+
+                parts.Add((string)next.Value);
+
+                if (lexer.PeekKind(ref span) != SyntaxKind.DotToken) break;
+                lexer.DiscardPeekedToken();
+            }
+
+            return string.Join(".", parts);
+        }
+
+        private void ParseCallingConvention(ref StringSpan span, out bool isInstance, out bool isInstanceExplicit)
+        {
+            // See ECMA 335 page 178, II.15.3 'Calling convention'
+
+            // CallConv ::= [ instance [ explicit ] ] [ CallKind ]
+
+            // CallKind ::=
+            //   default
+            // | unmanaged cdecl
+            // | unmanaged fastcall
+            // | unmanaged stdcall
+            // | unmanaged thiscall
+            // | vararg
+
+            var nextKind = lexer.PeekKind(ref span);
+
+            isInstance = nextKind == SyntaxKind.InstanceKeyword;
+            if (isInstance)
+            {
+                lexer.DiscardPeekedToken();
+
+                isInstanceExplicit = lexer.PeekKind(ref span) == SyntaxKind.ExplicitKeyword;
+                if (isInstanceExplicit)
+                    lexer.DiscardPeekedToken();
+
+                nextKind = lexer.PeekKind(ref span);
+            }
+            else
+            {
+                isInstanceExplicit = false;
+            }
+
+            switch (nextKind)
+            {
+                case SyntaxKind.DefaultKeyword:
+                    lexer.DiscardPeekedToken();
+                    break;
+
+                case SyntaxKind.VarargKeyword:
+                case SyntaxKind.UnmanagedKeyword:
+                    throw new NotSupportedException($"The {nameof(MethodReference<TType>)} type does not support calling conventions other than 'default'.");
+            }
+        }
+
+        private IReadOnlyList<TType> ParseGenericArguments(ref StringSpan span)
+        {
+            if (lexer.PeekKind(ref span) != SyntaxKind.OpenAngleToken)
+                return Array.Empty<TType>();
+
+            lexer.DiscardPeekedToken();
+
+            var arguments = new List<TType>();
+
+            while (true)
+            {
+                var result = ParseType(ref span);
+                if (!result.Value.IsSome(out var parameterType))
+                    throw new FormatException(result.PeekedTokenMessage);
+
+                arguments.Add(parameterType);
+
+                var next = lexer.Lex(ref span);
+                switch (next.Kind)
+                {
+                    case SyntaxKind.CommaToken:
+                        break;
+
+                    case SyntaxKind.CloseAngleToken:
+                        return arguments;
+
+                    default:
+                        throw new FormatException("Expected ',' or '>' to follow generic argument.");
+                }
+            }
+        }
+
+        private ParseResult<TType> ParseTypeSpec(ref StringSpan span)
+        {
+            // See ECMA 335 page 123, II.7.1 'Types'
+
+            // <TypeSpec> ::=
+            //   '[' [ .module ] <DottedName> ']'
+            // | <TypeReference>
+            // | <Type>
+
+            switch (lexer.PeekKind(ref span))
+            {
+                case SyntaxKind.OpenSquareToken:
+                    throw new NotSupportedException($"Scope type spec is not currently supported by {nameof(IILAsmTypeSyntaxTypeProvider<TType>)}.");
+
+                case SyntaxKind.Identifier:
+                    return ParseTypeReference(ref span, isValueType: null);
+
+                default:
+                    return ParseType(ref span);
+            }
+        }
+
         private ParseResult<TType> ParseType(ref StringSpan span)
         {
+            // See ECMA 335 page 122, II.7.1 'Types'
+
             var result = ParseTypeKeyword(ref span);
             if (!result.Value.IsSome(out var type)) return result;
 
             while (true)
             {
-                var next = lexer.Lex(ref span);
-
-                switch (next.Kind)
+                switch (lexer.PeekKind(ref span))
                 {
                     case SyntaxKind.End:
+                        lexer.DiscardPeekedToken();
                         return type;
 
                     case SyntaxKind.AmpersandToken:
+                        lexer.DiscardPeekedToken();
                         type = provider.GetByReferenceType(type);
                         break;
 
                     case SyntaxKind.AsteriskToken:
+                        lexer.DiscardPeekedToken();
                         type = provider.GetPointerType(type);
                         break;
 
                     case SyntaxKind.PinnedKeyword:
+                        lexer.DiscardPeekedToken();
                         type = provider.GetPinnedType(type);
                         break;
 
                     case SyntaxKind.OpenSquareToken:
+                        lexer.DiscardPeekedToken();
                         var rank = ReadArrayRank(ref span);
                         type = provider.GetArrayType(type, rank);
                         break;
 
                     case SyntaxKind.OpenAngleToken:
-                        var arguments = new List<TType>();
+                        var genericArguments = ParseGenericArguments(ref span);
 
-                        while (true)
-                        {
-                            result = ParseType(ref span);
-                            if (!result.Value.IsSome(out var argument))
-                                throw new FormatException(result.UnusedTokenMessage);
-
-                            arguments.Add(argument);
-
-                            switch (result.UnusedToken?.Kind)
-                            {
-                                case SyntaxKind.CloseAngleToken:
-                                    break;
-
-                                case SyntaxKind.CommaToken:
-                                    continue;
-
-                                default:
-                                    throw new FormatException("Expected ',' or '>'.");
-                            }
-
-                            break;
-                        }
-
-                        type = provider.GetGenericInstantiation(type, arguments);
+                        type = provider.GetGenericInstantiation(type, genericArguments);
                         break;
 
                     default:
-                        return new ParseResult<TType>(type, next, "Expected '&', '*', 'pinned', '[', '<', or end to follow type.");
+                        return new ParseResult<TType>(type, "Expected '&', '*', 'pinned', '[', '<', or end to follow type.");
                 }
             }
         }
@@ -136,15 +399,14 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
         private ParseResult<TType> ParseTypeKeyword(ref StringSpan span)
         {
-            var next = lexer.Lex(ref span);
-
-            switch (next.Kind)
+            switch (lexer.PeekKind(ref span))
             {
                 case SyntaxKind.ExclamationToken:
                 case SyntaxKind.DoubleExclamationToken:
-                    var isMethod = next.Kind == SyntaxKind.DoubleExclamationToken;
+                    var isMethod = lexer.PeekedTokenKind == SyntaxKind.DoubleExclamationToken;
+                    lexer.DiscardPeekedToken();
 
-                    next = lexer.Lex(ref span);
+                    var next = lexer.Lex(ref span);
                     if (next.Kind != SyntaxKind.NumericLiteralToken)
                     {
                         var syntax = isMethod ? "!!" : "!";
@@ -158,34 +420,46 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         : provider.GetGenericTypeParameter(index);
 
                 case SyntaxKind.BoolKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Boolean);
 
                 case SyntaxKind.CharKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Char);
 
                 case SyntaxKind.ClassKeyword:
                 case SyntaxKind.ValueTypeKeyword:
-                    return ParseTypeFromReference(ref span, next.Kind == SyntaxKind.ValueTypeKeyword);
+                    var isValueType = lexer.PeekedTokenKind == SyntaxKind.ValueTypeKeyword;
+                    lexer.DiscardPeekedToken();
+                    return ParseTypeReference(ref span, isValueType);
 
                 case SyntaxKind.Float32Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Single);
 
                 case SyntaxKind.Float64Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Double);
 
                 case SyntaxKind.Int8Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.SByte);
 
                 case SyntaxKind.Int16Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Int16);
 
                 case SyntaxKind.Int32Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Int32);
 
                 case SyntaxKind.Int64Keyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Int64);
 
                 case SyntaxKind.NativeKeyword:
+                    lexer.DiscardPeekedToken();
+
                     next = lexer.Lex(ref span);
                     switch (next.Kind)
                     {
@@ -204,15 +478,20 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     }
 
                 case SyntaxKind.ObjectKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Object);
 
                 case SyntaxKind.StringKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.String);
 
                 case SyntaxKind.TypedReferenceKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.TypedReference);
 
                 case SyntaxKind.UnsignedKeyword:
+                    lexer.DiscardPeekedToken();
+
                     next = lexer.Lex(ref span);
                     switch (next.Kind)
                     {
@@ -233,6 +512,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     }
 
                 case SyntaxKind.VoidKeyword:
+                    lexer.DiscardPeekedToken();
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Void);
 
                 case SyntaxKind.ModoptKeyword:
@@ -243,14 +523,13 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     throw new NotSupportedException($"Method pointers are not currently supported by {nameof(IILAsmTypeSyntaxTypeProvider<TType>)}.");
 
                 default:
-                    return new ParseResult<TType>(next, "Expected valid type keyword.");
+                    return new ParseResult<TType>("Expected valid type keyword.");
             }
         }
 
-        private TType ParseTypeFromReference(ref StringSpan span, bool isValueType)
+        private TType ParseTypeReference(ref StringSpan span, bool? isValueType)
         {
             ParseTopLevelName(ref span,
-                isValueType,
                 out var assemblyName,
                 out var namespaceName,
                 out var topLevelTypeName,
@@ -268,15 +547,14 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 nestedNames ?? Array.Empty<string>());
         }
 
-        private void ParseTopLevelName(ref StringSpan span, bool isValueType, out string assemblyName, out string namespaceName, out string topLevelTypeName, out bool isSlashTokenPeeked)
+        private void ParseTopLevelName(ref StringSpan span, out string assemblyName, out string namespaceName, out string topLevelTypeName, out bool isSlashTokenPeeked)
         {
             var namespaceSegments = new List<string>();
             var next = lexer.Lex(ref span);
             switch (next.Kind)
             {
                 case SyntaxKind.OpenSquareToken:
-                    next = lexer.Lex(ref span);
-                    switch (next.Kind)
+                    switch (lexer.PeekKind(ref span))
                     {
                         case SyntaxKind.Identifier:
                             break;
@@ -288,32 +566,11 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                             throw new FormatException("Expected identifier or '.module' to follow '['.");
                     }
 
-                    var assemblyNameParts = new List<string> { (string)next.Value };
+                    assemblyName = ParseDottedName(ref span);
 
-                    while (true)
-                    {
-                        next = lexer.Lex(ref span);
-                        switch (next.Kind)
-                        {
-                            case SyntaxKind.CloseSquareToken:
-                                break;
-
-                            case SyntaxKind.DotToken:
-                                next = lexer.Lex(ref span);
-                                if (next.Kind != SyntaxKind.Identifier)
-                                    throw new FormatException("Expected identifier to follow '.'.");
-
-                                assemblyNameParts.Add((string)next.Value);
-                                continue;
-
-                            default:
-                                throw new FormatException("Expected '.' or ']' to follow identifier.");
-                        }
-
-                        break;
-                    }
-
-                    assemblyName = string.Join(".", assemblyNameParts);
+                    next = lexer.Lex(ref span);
+                    if (next.Kind != SyntaxKind.CloseSquareToken)
+                        throw new FormatException("Expected '.' or ']' to follow identifier.");
 
                     next = lexer.Lex(ref span);
                     if (next.Kind != SyntaxKind.Identifier)
@@ -328,8 +585,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     break;
 
                 default:
-                    var syntax = isValueType ? "valuetype" : "class";
-                    throw new FormatException($"Expected identifier or '[' to follow '{syntax}'.");
+                    throw new FormatException($"Expected identifier or '['.");
             }
 
             isSlashTokenPeeked = false;
@@ -362,44 +618,16 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
         private IReadOnlyList<string> ParseNestedNames(ref StringSpan span)
         {
-            var isSlashTokenPeeked = true;
             var nestedNames = new List<string>();
 
-            while (isSlashTokenPeeked)
+            do
             {
                 lexer.DiscardPeekedToken();
-                isSlashTokenPeeked = false;
-
-                var next = lexer.Lex(ref span);
-                if (next.Kind != SyntaxKind.Identifier)
-                    throw new FormatException("Expected identifier to follow '/'.");
 
                 if (nestedNames is null) nestedNames = new List<string>();
-                var dottedSegments = new List<string> { (string)next.Value };
-
-                while (true)
-                {
-                    switch (lexer.PeekKind(ref span))
-                    {
-                        case SyntaxKind.DotToken:
-                            lexer.DiscardPeekedToken();
-                            next = lexer.Lex(ref span);
-                            if (next.Kind != SyntaxKind.Identifier)
-                                throw new FormatException("Expected identifier to follow '.'.");
-
-                            dottedSegments.Add((string)next.Value);
-                            continue;
-
-                        case SyntaxKind.SlashToken:
-                            isSlashTokenPeeked = true;
-                            break;
-                    }
-
-                    break;
-                }
-
-                nestedNames.Add(string.Join(".", dottedSegments));
+                nestedNames.Add(ParseDottedName(ref span));
             }
+            while (lexer.PeekKind(ref span) == SyntaxKind.SlashToken);
 
             return nestedNames;
         }

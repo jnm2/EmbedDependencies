@@ -113,7 +113,7 @@ namespace Techsola.EmbedDependencies
             }
         }
 
-        public TypeReference GetTypeFromReference(bool isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames)
+        public TypeReference GetTypeFromReference(bool? isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames)
         {
             var scope = assemblyName is null ? null : getScopeForAssemblyName.Invoke(assemblyName);
 
@@ -127,7 +127,9 @@ namespace Techsola.EmbedDependencies
                 };
             }
 
-            type.IsValueType = isValueType;
+            if (isValueType != null)
+                type.IsValueType = isValueType.Value;
+
             return type;
         }
     }

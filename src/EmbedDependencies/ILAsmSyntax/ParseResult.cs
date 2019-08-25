@@ -4,35 +4,33 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 {
     internal readonly struct ParseResult<T>
     {
-        private ParseResult(Optional<T> value, SyntaxToken? unusedToken, string unusedTokenMessage)
+        private ParseResult(Optional<T> value, string peekedTokenMessage)
         {
             Value = value;
-            UnusedToken = unusedToken;
-            UnusedTokenMessage = unusedTokenMessage;
+            PeekedTokenMessage = peekedTokenMessage;
         }
 
         public ParseResult(T value)
-            : this(Optional.Some(value), unusedToken: null, unusedTokenMessage: null)
+            : this(Optional.Some(value), peekedTokenMessage: null)
         {
         }
 
-        public ParseResult(T value, SyntaxToken unusedToken, string unusedTokenMessage)
-            : this(Optional.Some(value), unusedToken, unusedTokenMessage)
+        public ParseResult(T value, string peekedTokenMessage)
+            : this(Optional.Some(value), peekedTokenMessage)
         {
-            if (string.IsNullOrWhiteSpace(unusedTokenMessage))
-                throw new ArgumentException("Unused token message must be specified.", nameof(unusedTokenMessage));
+            if (string.IsNullOrWhiteSpace(peekedTokenMessage))
+                throw new ArgumentException("Peeked token message must be specified.", nameof(peekedTokenMessage));
         }
 
-        public ParseResult(SyntaxToken unusedToken, string unusedTokenMessage)
-            : this(Optional.None<T>(), unusedToken, unusedTokenMessage)
+        public ParseResult(string peekedTokenMessage)
+            : this(Optional.None<T>(), peekedTokenMessage)
         {
-            if (string.IsNullOrWhiteSpace(unusedTokenMessage))
-                throw new ArgumentException("Unused token message must be specified.", nameof(unusedTokenMessage));
+            if (string.IsNullOrWhiteSpace(peekedTokenMessage))
+                throw new ArgumentException("Peeked token message must be specified.", nameof(peekedTokenMessage));
         }
 
         public Optional<T> Value { get; }
-        public SyntaxToken? UnusedToken { get; }
-        public string UnusedTokenMessage { get; }
+        public string PeekedTokenMessage { get; }
 
         public static implicit operator ParseResult<T>(T value) => new ParseResult<T>(value);
     }

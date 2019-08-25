@@ -6,13 +6,18 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 {
     internal sealed class ILAsmLexer
     {
+        // If entries change, update the switch in the Lex method so that the appropriate first letters are assigned to
+        // ReadIdentifier and ReadKeywordOrIdentifier.
         private static readonly Dictionary<string, SyntaxKind> KeywordsStartingWithPossibleIdentifierChar = new Dictionary<string, SyntaxKind>
         {
             ["bool"] = SyntaxKind.BoolKeyword,
             ["char"] = SyntaxKind.CharKeyword,
             ["class"] = SyntaxKind.ClassKeyword,
+            ["default"] = SyntaxKind.DefaultKeyword,
+            ["explicit"] = SyntaxKind.ExplicitKeyword,
             ["float32"] = SyntaxKind.Float32Keyword,
             ["float64"] = SyntaxKind.Float64Keyword,
+            ["instance"] = SyntaxKind.InstanceKeyword,
             ["int"] = SyntaxKind.IntKeyword,
             ["int8"] = SyntaxKind.Int8Keyword,
             ["int16"] = SyntaxKind.Int16Keyword,
@@ -26,12 +31,19 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             ["pinned"] = SyntaxKind.PinnedKeyword,
             ["string"] = SyntaxKind.StringKeyword,
             ["typedref"] = SyntaxKind.TypedReferenceKeyword,
+            ["unmanaged"] = SyntaxKind.UnmanagedKeyword,
             ["unsigned"] = SyntaxKind.UnsignedKeyword,
             ["valuetype"] = SyntaxKind.ValueTypeKeyword,
+            ["vararg"] = SyntaxKind.VarargKeyword,
             ["void"] = SyntaxKind.VoidKeyword
         };
 
         private SyntaxToken? peekedToken;
+
+        public SyntaxKind PeekedTokenKind
+        {
+            get => peekedToken?.Kind ?? throw new InvalidOperationException("No token is currently peeked.");
+        }
 
         public SyntaxKind PeekKind(ref StringSpan span)
         {
@@ -100,6 +112,8 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         span = span.Slice(1);
                         return
                             TryRead(ref span, "..") ? SyntaxKind.EllipsisToken :
+                            TryRead(ref span, "cctor") ? SyntaxKind.DotCctorKeyword :
+                            TryRead(ref span, "ctor") ? SyntaxKind.DotCtorKeyword :
                             TryRead(ref span, "module") ? SyntaxKind.DotModuleKeyword :
                             SyntaxKind.DotToken;
 
@@ -115,8 +129,17 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         span = span.Slice(1);
                         return SyntaxKind.SlashToken;
 
-                    case '0':
+                    case ':':
                         var advanced = span.Slice(1);
+                        if (TryRead(ref advanced, ':'))
+                        {
+                            span = advanced;
+                            return SyntaxKind.DoubleColonToken;
+                        }
+                        goto default;
+
+                    case '0':
+                        advanced = span.Slice(1);
                         if (TryRead(ref advanced, 'x'))
                         {
                             span = advanced;
@@ -136,6 +159,8 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
                     case 'b':
                     case 'c':
+                    case 'd':
+                    case 'e':
                     case 'f':
                     case 'i':
                     case 'm':
@@ -149,8 +174,6 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         return ReadKeywordOrIdentifier(ref span);
 
                     case 'a':
-                    case 'd':
-                    case 'e':
                     case 'g':
                     case 'h':
                     case 'j':
