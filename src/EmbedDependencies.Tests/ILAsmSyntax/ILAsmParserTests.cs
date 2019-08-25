@@ -533,5 +533,53 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
 
             method.MethodName.ShouldBe("This.Is.Legal");
         }
+
+        [Test]
+        public static void Single_method_parameter()
+        {
+            var method = ILAsmParser.ParseMethodReference("void Foo::Bar(bool)", P);
+
+            method.ReturnType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Void));
+            method.DeclaringType.ShouldBe(P.GetTypeFromReference(null, null, "", "Foo"));
+            method.MethodName.ShouldBe("Bar");
+
+            method.Parameters.ShouldBe(new[]
+            {
+                P.GetPrimitiveType(PrimitiveTypeCode.Boolean)
+            });
+        }
+
+        [Test]
+        public static void Array_and_generic_method_parameters()
+        {
+            var method = ILAsmParser.ParseMethodReference("void Foo::Bar(bool[,][,], class Foo<bool, int32>, bool)", P);
+
+            method.ReturnType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Void));
+            method.DeclaringType.ShouldBe(P.GetTypeFromReference(null, null, "", "Foo"));
+            method.MethodName.ShouldBe("Bar");
+
+            method.Parameters.ShouldBe(new[]
+            {
+                P.GetArrayType(
+                    P.GetArrayType(
+                        P.GetPrimitiveType(PrimitiveTypeCode.Boolean),
+                        rank: 2),
+                    rank: 2),
+                P.GetGenericInstantiation(
+                    P.GetTypeFromReference(false, null, "", "Foo"),
+                    new[]
+                    {
+                        P.GetPrimitiveType(PrimitiveTypeCode.Boolean),
+                        P.GetPrimitiveType(PrimitiveTypeCode.Int32)
+                    }),
+                P.GetPrimitiveType(PrimitiveTypeCode.Boolean)
+            });
+        }
+
+        [Test]
+        public static void Varargs_method_parameters_not_supported()
+        {
+            Should.Throw<NotSupportedException>(() => ILAsmParser.ParseMethodReference("void Foo::Bar(...)", P));
+        }
     }
 }

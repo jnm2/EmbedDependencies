@@ -109,6 +109,8 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
             var methodName = ParseMethodName(ref span);
 
+            var parameters = ParseParameterList(ref span);
+
             return new MethodReference<TType>(
                 instance,
                 instanceExplicit,
@@ -116,7 +118,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 declaringType,
                 methodName,
                 genericArguments: Array.Empty<TType>(),
-                parameters: Array.Empty<TType>());
+                parameters);
         }
 
         private string ParseMethodName(ref StringSpan span)
@@ -143,6 +145,54 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
 
                 default:
                     throw new FormatException("Expected '.cctor', '.ctor', or identifier following '::'.");
+            }
+        }
+
+        private IReadOnlyList<TType> ParseParameterList(ref StringSpan span)
+        {
+            var next = lexer.Lex(ref span);
+            if (next.Kind != SyntaxKind.OpenParenToken)
+                throw new FormatException("Expected '(' to follow method name.");
+
+            // See ECMA 335 page 179, II.15.4 'Defining methods'
+
+            // Parameters ::= [ <Param> [ ',' <Param> ]* ]
+
+            // Param ::=
+            //   ...
+            // | [ <ParamAttr>* ] <Type> [ marshal '(' [ <NativeType> ] ')' ] [ Id ]
+
+            switch (lexer.PeekKind(ref span))
+            {
+                case SyntaxKind.CloseParenToken:
+                    return Array.Empty<TType>();
+
+                case SyntaxKind.EllipsisToken:
+                    throw new NotSupportedException($"The {nameof(MethodReference<TType>)} type does not support varargs calls.");
+            }
+
+            var parameters = new List<TType>();
+
+            while (true)
+            {
+                var result = ParseType(ref span);
+                if (!result.Value.IsSome(out var parameterType))
+                    throw new FormatException(result.PeekedTokenMessage);
+
+                parameters.Add(parameterType);
+
+                next = lexer.Lex(ref span);
+                switch (next.Kind)
+                {
+                    case SyntaxKind.CommaToken:
+                        break;
+
+                    case SyntaxKind.CloseParenToken:
+                        return parameters;
+
+                    default:
+                        throw new FormatException("Expected ',' or ')' to follow method parameter type.");
+                }
             }
         }
 
