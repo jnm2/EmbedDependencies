@@ -20,6 +20,20 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         }
 
         [Test]
+        public static void ArgumentException_for_whitespace([Values(null, "", " ")] string whitespace)
+        {
+            var ex = AssertException<ArgumentException>(whitespace);
+
+            ex.ParamName.ShouldBe("typeNameSyntax");
+        }
+
+        [Test]
+        public static void FormatException_for_invalid_character()
+        {
+            AssertException<FormatException>("/");
+        }
+
+        [Test]
         public static void Generic_type_parameter([Values(0, 1, int.MaxValue)] int index)
         {
             AssertCallTree(

@@ -24,12 +24,13 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
         public TType Decode(string typeNameSyntax)
         {
             var span = (StringSpan)typeNameSyntax;
-            return ParseType(ref span);
+
+            return ParseType(ref span, nameof(typeNameSyntax));
         }
 
-        private TType ParseType(ref StringSpan span)
+        private TType ParseType(ref StringSpan span, string paramNameForWhitespaceException)
         {
-            var type = ParseBeginning(ref span);
+            var type = ParseTypeKeyword(ref span, paramNameForWhitespaceException);
 
             while (true)
             {
@@ -58,7 +59,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             }
         }
 
-        private TType ParseBeginning(ref StringSpan span)
+        private TType ParseTypeKeyword(ref StringSpan span, string paramNameForWhitespaceException)
         {
             var next = lexer.Lex(ref span);
 
@@ -159,8 +160,18 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 case SyntaxKind.VoidKeyword:
                     return provider.GetPrimitiveType(PrimitiveTypeCode.Void);
 
+                case SyntaxKind.ModoptKeyword:
+                case SyntaxKind.ModreqKeyword:
+                    throw new NotSupportedException($"Custom modifiers are not currently supported by {nameof(IILAsmTypeNameSyntaxTypeProvider<TType>)}.");
+
+                case SyntaxKind.MethodKeyword:
+                    throw new NotSupportedException($"Method pointers are not currently supported by {nameof(IILAsmTypeNameSyntaxTypeProvider<TType>)}.");
+
+                case SyntaxKind.End:
+                    throw new ArgumentException("Type name syntax must be specified.", paramNameForWhitespaceException);
+
                 default:
-                    throw new NotImplementedException();
+                    throw new FormatException("Expected valid type keyword.");
             }
         }
 
