@@ -120,8 +120,17 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                         span = span.Slice(1);
                         return SyntaxKind.SlashToken;
 
-                    case '0':
+                    case ':':
                         var advanced = span.Slice(1);
+                        if (TryRead(ref advanced, ':'))
+                        {
+                            span = advanced;
+                            return SyntaxKind.DoubleColonToken;
+                        }
+                        goto default;
+
+                    case '0':
+                        advanced = span.Slice(1);
                         if (TryRead(ref advanced, 'x'))
                         {
                             span = advanced;

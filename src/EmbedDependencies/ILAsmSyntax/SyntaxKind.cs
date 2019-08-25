@@ -18,6 +18,7 @@
         DotToken,
         EllipsisToken,
         SlashToken,
+        DoubleColonToken,
         NumericLiteralToken,
         StringLiteralToken,
         BoolKeyword,

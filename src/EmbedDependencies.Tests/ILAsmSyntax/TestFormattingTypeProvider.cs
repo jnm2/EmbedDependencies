@@ -26,7 +26,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
             return $"GetPrimitiveType({typeCode})";
         }
 
-        public string GetTypeFromReference(bool isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames = null)
+        public string GetTypeFromReference(bool? isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames = null)
         {
             if (nestedTypeNames is null) nestedTypeNames = Array.Empty<string>();
             return $"GetTypeFromReference(isValueType: {FormatBooleanLiteral(isValueType)}, assemblyName: {FormatStringLiteral(assemblyName)}, namespaceName: {FormatStringLiteral(namespaceName)}, topLevelTypeName: {FormatStringLiteral(topLevelTypeName)}, nestedTypeNames: {FormatArrayLiteral(nestedTypeNames)})";
@@ -57,9 +57,12 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
             return $"GetPinnedType({elementType})";
         }
 
-        private static string FormatBooleanLiteral(bool value)
+        private static string FormatBooleanLiteral(bool? value)
         {
-            return value ? "true" : "false";
+            return
+                value is null ? "null" :
+                value.Value ? "true" :
+                "false";
         }
 
         private static string FormatStringLiteral(string value)

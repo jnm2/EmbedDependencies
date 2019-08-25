@@ -20,7 +20,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         }
 
         [Test]
-        public static void ArgumentException_for_whitespace([Values(null, "", " ")] string whitespace)
+        public static void ParseType_should_throw_ArgumentException_for_whitespace([Values(null, "", " ")] string whitespace)
         {
             var ex = AssertException<ArgumentException>(whitespace);
 
@@ -28,7 +28,7 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
         }
 
         [Test]
-        public static void FormatException_for_invalid_character()
+        public static void ParseType_should_throw_FormatException_for_invalid_character()
         {
             AssertException<FormatException>("/");
         }
@@ -315,6 +315,107 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
                                 P.GetGenericTypeParameter(0)
                             })
                     }));
+        }
+
+        [Test]
+        public static void ParseFieldReference_should_throw_ArgumentException_for_whitespace([Values(null, "", " ")] string whitespace)
+        {
+            var ex = Should.Throw<ArgumentException>(() => ILAsmParser.ParseFieldReference(whitespace, P));
+
+            ex.ParamName.ShouldBe("fieldReferenceSyntax");
+        }
+
+        [Test]
+        public static void ParseFieldReference_should_throw_FormatException_for_invalid_character()
+        {
+            Should.Throw<FormatException>(() => ILAsmParser.ParseFieldReference("/", P));
+        }
+
+        [Test]
+        public static void Field_reference_with_type_spec()
+        {
+            var field = ILAsmParser.ParseFieldReference("bool ClassName::FieldName", P);
+
+            field.FieldType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Boolean));
+
+            field.DeclaringType.ShouldBe(P.GetTypeFromReference(null, null, "", "ClassName"));
+
+            field.FieldName.ShouldBe("FieldName");
+        }
+
+        [Test]
+        public static void Field_reference_with_type_reference()
+        {
+            var field = ILAsmParser.ParseFieldReference("bool class ClassName::FieldName", P);
+
+            field.FieldType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Boolean));
+
+            field.DeclaringType.ShouldBe(P.GetTypeFromReference(false, null, "", "ClassName"));
+
+            field.FieldName.ShouldBe("FieldName");
+        }
+
+        [Test]
+        public static void Field_reference_with_nested_classes()
+        {
+            var field = ILAsmParser.ParseFieldReference("class A.B.C/D.E.F/G H.I.J/K.L.M/N::FieldName", P);
+
+            field.FieldType.ShouldBe(P.GetTypeFromReference(
+                isValueType: false,
+                assemblyName: null,
+                namespaceName: "A.B",
+                topLevelTypeName: "C",
+                nestedTypeNames: new[] { "D.E.F", "G" }));
+
+            field.DeclaringType.ShouldBe(P.GetTypeFromReference(
+                isValueType: null,
+                assemblyName: null,
+                namespaceName: "H.I",
+                topLevelTypeName: "J",
+                nestedTypeNames: new[] { "K.L.M", "N" }));
+
+            field.FieldName.ShouldBe("FieldName");
+        }
+
+        [Test]
+        public static void Field_reference_with_array_return_and_assemblies()
+        {
+            var field = ILAsmParser.ParseFieldReference("class [a] Foo[] class [a]Bar::FieldName", P);
+
+            field.FieldType.ShouldBe(
+                P.GetArrayType(
+                    P.GetTypeFromReference(false, "a", "", "Foo"),
+                    rank: 1));
+
+            field.DeclaringType.ShouldBe(P.GetTypeFromReference(false, "a", "", "Bar"));
+
+            field.FieldName.ShouldBe("FieldName");
+        }
+
+        [Test]
+        public static void Field_reference_with_generics()
+        {
+            var field = ILAsmParser.ParseFieldReference("class Foo`1/Bar`1<!0, !1> class Foo`1/Bar`1<bool, int32>::FieldName", P);
+
+            field.FieldType.ShouldBe(
+                P.GetGenericInstantiation(
+                    P.GetTypeFromReference(false, null, "", "Foo`1", nestedTypeNames: new[] { "Bar`1" }),
+                    new[]
+                    {
+                        P.GetGenericTypeParameter(0),
+                        P.GetGenericTypeParameter(1)
+                    }));
+
+            field.DeclaringType.ShouldBe(
+                P.GetGenericInstantiation(
+                    P.GetTypeFromReference(false, null, "", "Foo`1", nestedTypeNames: new[] { "Bar`1" }),
+                    new[]
+                    {
+                        P.GetPrimitiveType(PrimitiveTypeCode.Boolean),
+                        P.GetPrimitiveType(PrimitiveTypeCode.Int32)
+                    }));
+
+            field.FieldName.ShouldBe("FieldName");
         }
     }
 }

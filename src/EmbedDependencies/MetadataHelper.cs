@@ -21,6 +21,13 @@ namespace Techsola.EmbedDependencies
             return ILAsmParser.ParseType(ilasmSyntax, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
         }
 
+        public FieldReference GetFieldReference(string ilasmSyntax)
+        {
+            var field = ILAsmParser.ParseFieldReference(ilasmSyntax, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
+
+            return new FieldReference(field.FieldName, field.FieldType, field.DeclaringType);
+        }
+
         private IMetadataScope GetScopeForAssemblyName(string assemblyName)
         {
             return scopesByAssemblyMoniker.TryGetValue(assemblyName, out var scope)

@@ -9,6 +9,11 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
         {
             return new ILAsmParser<TType>(provider).ParseType(typeSyntax);
         }
+
+        public static FieldReference<TType> ParseFieldReference<TType>(string fieldReferenceSyntax, IILAsmTypeSyntaxTypeProvider<TType> provider)
+        {
+            return new ILAsmParser<TType>(provider).ParseFieldReference(fieldReferenceSyntax);
+        }
     }
 
     internal sealed class ILAsmParser<TType>
@@ -38,8 +43,64 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             return result.Value.Value;
         }
 
+        public FieldReference<TType> ParseFieldReference(string fieldReferenceSyntax)
+        {
+            // See ECMA 335 page 513, VI.C.4.9 'Instructions that take a field of a class as an argument'
+
+            // <type> <typeSpec> :: <id>
+
+            var span = (StringSpan)fieldReferenceSyntax;
+
+            var result = ParseType(ref span);
+            if (!result.Value.IsSome(out var fieldType))
+            {
+                if (lexer.PeekedTokenKind == SyntaxKind.End)
+                    throw new ArgumentException("Field reference syntax must be specified.", nameof(fieldReferenceSyntax));
+
+                throw new FormatException(result.PeekedTokenMessage);
+            }
+
+            result = ParseTypeSpec(ref span);
+            if (!result.Value.IsSome(out var declaringType))
+                throw new FormatException(result.PeekedTokenMessage);
+
+            var next = lexer.Lex(ref span);
+            if (next.Kind != SyntaxKind.DoubleColonToken)
+                throw new FormatException("Expected '::' following type spec.");
+
+            next = lexer.Lex(ref span);
+            if (next.Kind != SyntaxKind.Identifier)
+                throw new FormatException("Expected identifier following '::'.");
+
+            return new FieldReference<TType>(fieldType, declaringType, (string)next.Value);
+        }
+
+        private ParseResult<TType> ParseTypeSpec(ref StringSpan span)
+        {
+            // See ECMA 335 page 123, II.7.1 'Types'
+
+            // <TypeSpec> ::=
+            //   '[' [ .module ] <DottedName> ']'
+            // | <TypeReference>
+            // | <Type>
+
+            switch (lexer.PeekKind(ref span))
+            {
+                case SyntaxKind.OpenSquareToken:
+                    throw new NotSupportedException($"Scope type spec is not currently supported by {nameof(IILAsmTypeSyntaxTypeProvider<TType>)}.");
+
+                case SyntaxKind.Identifier:
+                    return ParseTypeReference(ref span, isValueType: null);
+
+                default:
+                    return ParseType(ref span);
+            }
+        }
+
         private ParseResult<TType> ParseType(ref StringSpan span)
         {
+            // See ECMA 335 page 122, II.7.1 'Types'
+
             var result = ParseTypeKeyword(ref span);
             if (!result.Value.IsSome(out var type)) return result;
 
@@ -173,7 +234,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 case SyntaxKind.ValueTypeKeyword:
                     var isValueType = lexer.PeekedTokenKind == SyntaxKind.ValueTypeKeyword;
                     lexer.DiscardPeekedToken();
-                    return ParseTypeFromReference(ref span, isValueType);
+                    return ParseTypeReference(ref span, isValueType);
 
                 case SyntaxKind.Float32Keyword:
                     lexer.DiscardPeekedToken();
@@ -269,10 +330,9 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
             }
         }
 
-        private TType ParseTypeFromReference(ref StringSpan span, bool isValueType)
+        private TType ParseTypeReference(ref StringSpan span, bool? isValueType)
         {
             ParseTopLevelName(ref span,
-                isValueType,
                 out var assemblyName,
                 out var namespaceName,
                 out var topLevelTypeName,
@@ -290,7 +350,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 nestedNames ?? Array.Empty<string>());
         }
 
-        private void ParseTopLevelName(ref StringSpan span, bool isValueType, out string assemblyName, out string namespaceName, out string topLevelTypeName, out bool isSlashTokenPeeked)
+        private void ParseTopLevelName(ref StringSpan span, out string assemblyName, out string namespaceName, out string topLevelTypeName, out bool isSlashTokenPeeked)
         {
             var namespaceSegments = new List<string>();
             var next = lexer.Lex(ref span);
@@ -350,8 +410,7 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                     break;
 
                 default:
-                    var syntax = isValueType ? "valuetype" : "class";
-                    throw new FormatException($"Expected identifier or '[' to follow '{syntax}'.");
+                    throw new FormatException($"Expected identifier or '['.");
             }
 
             isSlashTokenPeeked = false;
