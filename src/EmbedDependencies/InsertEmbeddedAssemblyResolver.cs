@@ -50,11 +50,8 @@ namespace Techsola.EmbedDependencies
             var frameworkName = parts?[0];
             var version = parts is null ? null : Version.Parse(parts[1].Substring("Version=v".Length));
 
-            var appDomainAssemblyScope = module.TypeSystem.CoreLibrary;
-            var collectionsAssemblyScope = module.TypeSystem.CoreLibrary;
-
-            var scopesByAssemblySpec = ((AssemblySpec[])Enum.GetValues(typeof(AssemblySpec)))
-                .ToDictionary(spec => spec, spec => module.TypeSystem.CoreLibrary);
+            var scopesByAssemblyMoniker = AssemblyMonikers.GetAll()
+                .ToDictionary(m => m, m => module.TypeSystem.CoreLibrary);
 
             if (frameworkName == ".NETCoreApp")
             {
@@ -64,9 +61,9 @@ namespace Techsola.EmbedDependencies
                 var runtimeExtensions = GetOrAddAssemblyReference(module, "System.Runtime.Extensions");
                 var collections = GetOrAddAssemblyReference(module, "System.Collections");
 
-                scopesByAssemblySpec[AssemblySpec.AssemblyContainingSystemAppDomain] = runtimeExtensions;
-                scopesByAssemblySpec[AssemblySpec.AssemblyContainingSystemStringComparer] = runtimeExtensions;
-                scopesByAssemblySpec[AssemblySpec.AssemblyContainingSystemCollections] = collections;
+                scopesByAssemblyMoniker[AssemblyMonikers.HasAppDomain] = runtimeExtensions;
+                scopesByAssemblyMoniker[AssemblyMonikers.HasStringComparer] = runtimeExtensions;
+                scopesByAssemblyMoniker[AssemblyMonikers.HasCollections] = collections;
             }
             else if (frameworkName == ".NETStandard")
             {
@@ -74,15 +71,14 @@ namespace Techsola.EmbedDependencies
                     throw new NotSupportedException("Versions of .NET Standard older than 2.0 are not supported.");
             }
 
-            var importer = new MetadataImporter(module, scopesByAssemblySpec);
+            var helper = new MetadataHelper(module, scopesByAssemblyMoniker);
+            var dictionaryField = CreateDictionaryField(moduleType, helper);
+            GenerateDictionaryInitializationIL(il, dictionaryField, embeddedResourceNamesByAssemblyName, helper);
 
-            var dictionaryField = CreateDictionaryField(moduleType, importer);
-            GenerateDictionaryInitializationIL(il, dictionaryField, embeddedResourceNamesByAssemblyName, importer);
-
-            var getResourceAssemblyStreamOrNullMethod = CreateGetResourceAssemblyStreamOrNullMethod(dictionaryField, moduleType, importer);
+            var getResourceAssemblyStreamOrNullMethod = CreateGetResourceAssemblyStreamOrNullMethod(dictionaryField, moduleType, helper);
             moduleType.Methods.Add(getResourceAssemblyStreamOrNullMethod);
 
-            GenerateAppDomainModuleInitializerIL(module, moduleType, il, importer);
+            GenerateAppDomainModuleInitializerIL(module, moduleType, il, helper);
 
             moduleType.Methods.Add(moduleInitializer);
         }
@@ -110,12 +106,12 @@ namespace Techsola.EmbedDependencies
             ILProcessor il,
             FieldDefinition dictionaryField,
             IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName,
-            MetadataImporter importer)
+            MetadataHelper helper)
         {
             il.Emit(OpCodes.Call, new MethodReference(
                 "get_OrdinalIgnoreCase",
-                returnType: importer[TypeSpecs.SystemStringComparer],
-                declaringType: importer[TypeSpecs.SystemStringComparer]));
+                returnType: helper["class [HasStringComparer]System.StringComparer"],
+                declaringType: helper["class [HasStringComparer]System.StringComparer"]));
 
             il.Emit(OpCodes.Newobj, new MethodReference(
                 ".ctor",
@@ -123,7 +119,7 @@ namespace Techsola.EmbedDependencies
                 declaringType: dictionaryField.FieldType)
             {
                 HasThis = true,
-                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemCollectionsGenericIEqualityComparer(new GenericParameterTypeSpec(0))]) }
+                Parameters = { new ParameterDefinition(helper["class [CoreLibrary]System.Collections.Generic.IEqualityComparer`1<!0>"]) }
             });
 
             foreach (var entry in embeddedResourceNamesByAssemblyName)
@@ -140,8 +136,8 @@ namespace Techsola.EmbedDependencies
                     HasThis = true,
                     Parameters =
                     {
-                        new ParameterDefinition(importer[new GenericParameterTypeSpec(0)]),
-                        new ParameterDefinition(importer[new GenericParameterTypeSpec(1)])
+                        new ParameterDefinition(helper["!0"]),
+                        new ParameterDefinition(helper["!1"])
                     }
                 });
             }
@@ -149,22 +145,22 @@ namespace Techsola.EmbedDependencies
             il.Emit(OpCodes.Stsfld, dictionaryField);
         }
 
-        private static void GenerateAppDomainModuleInitializerIL(ModuleDefinition module, TypeDefinition moduleType, ILProcessor il, MetadataImporter importer)
+        private static void GenerateAppDomainModuleInitializerIL(ModuleDefinition module, TypeDefinition moduleType, ILProcessor il, MetadataHelper helper)
         {
-            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(module, importer);
+            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(module, helper);
             moduleType.Methods.Add(assemblyResolveHandler);
 
             il.Emit(OpCodes.Call, new MethodReference(
                 "get_CurrentDomain",
-                returnType: importer[TypeSpecs.SystemAppDomain],
-                declaringType: importer[TypeSpecs.SystemAppDomain]));
+                returnType: helper["class [HasAppDomain]System.AppDomain"],
+                declaringType: helper["class [HasAppDomain]System.AppDomain"]));
 
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldftn, assemblyResolveHandler);
             il.Emit(OpCodes.Newobj, new MethodReference(
                 ".ctor",
                 returnType: module.TypeSystem.Void,
-                declaringType: importer[TypeSpecs.SystemResolveEventHandler])
+                declaringType: helper["class [HasAppDomain]System.ResolveEventHandler"])
             {
                 HasThis = true,
                 Parameters =
@@ -177,37 +173,37 @@ namespace Techsola.EmbedDependencies
             il.Emit(OpCodes.Callvirt, new MethodReference(
                 "add_AssemblyResolve",
                 returnType: module.TypeSystem.Void,
-                declaringType: importer[TypeSpecs.SystemAppDomain])
+                declaringType: helper["class [HasAppDomain]System.AppDomain"])
             {
                 HasThis = true,
-                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemResolveEventHandler]) }
+                Parameters = { new ParameterDefinition(helper["class [HasAppDomain]System.ResolveEventHandler"]) }
             });
 
             il.Emit(OpCodes.Ret);
         }
 
-        private static FieldDefinition CreateDictionaryField(TypeDefinition moduleType, MetadataImporter importer)
+        private static FieldDefinition CreateDictionaryField(TypeDefinition moduleType, MetadataHelper helper)
         {
             var field = new FieldDefinition(
                 "EmbeddedResourceNamesByAssemblyName",
                 FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly,
-                importer[TypeSpecs.SystemCollectionsGenericDictionary(TypeSpecs.SystemString, TypeSpecs.SystemString)]);
+                helper["class [HasCollections]System.Collections.Generic.Dictionary`2<string, string>"]);
 
             moduleType.Fields.Add(field);
             return field;
         }
 
-        private static MethodDefinition CreateAppDomainAssemblyResolveHandler(ModuleDefinition module, MetadataImporter importer)
+        private static MethodDefinition CreateAppDomainAssemblyResolveHandler(ModuleDefinition module, MetadataHelper helper)
         {
             var handler = new MethodDefinition(
                 "OnAssemblyResolve",
                 MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
-                returnType: importer[TypeSpecs.SystemReflectionAssembly])
+                returnType: helper["class System.Reflection.Assembly"])
             {
                 Parameters =
                 {
                     new ParameterDefinition(module.TypeSystem.Object),
-                    new ParameterDefinition(importer[TypeSpecs.SystemResolveEventArgs])
+                    new ParameterDefinition(helper["class [HasAppDomain]System.ResolveEventArgs"])
                 }
             };
 
@@ -221,14 +217,14 @@ namespace Techsola.EmbedDependencies
             return handler;
         }
 
-        private static MethodDefinition CreateGetResourceAssemblyStreamOrNullMethod(FieldDefinition dictionaryField, TypeDefinition moduleType, MetadataImporter importer)
+        private static MethodDefinition CreateGetResourceAssemblyStreamOrNullMethod(FieldDefinition dictionaryField, TypeDefinition moduleType, MetadataHelper helper)
         {
             var method = new MethodDefinition(
                 "GetResourceAssemblyStreamOrNull",
                 MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
-                returnType: importer[TypeSpecs.SystemIOStream])
+                returnType: helper["class [HasStream]System.IO.Stream"])
             {
-                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemReflectionAssemblyName]) }
+                Parameters = { new ParameterDefinition(helper["class System.Reflection.AssemblyName"]) }
             };
 
             var il = method.Body.GetILProcessor();
@@ -240,7 +236,7 @@ namespace Techsola.EmbedDependencies
             il.Emit(OpCodes.Callvirt, new MethodReference(
                 "get_Name",
                 returnType: dictionaryField.Module.TypeSystem.String,
-                declaringType: importer[TypeSpecs.SystemReflectionAssemblyName])
+                declaringType: helper["class System.Reflection.AssemblyName"])
             {
                 HasThis = true
             });
@@ -257,8 +253,8 @@ namespace Techsola.EmbedDependencies
                 HasThis = true,
                 Parameters =
                 {
-                    new ParameterDefinition(importer[new GenericParameterTypeSpec(0)]),
-                    new ParameterDefinition(importer[new ByRefTypeSpec(new GenericParameterTypeSpec(1))])
+                    new ParameterDefinition(helper["!0"]),
+                    new ParameterDefinition(helper["!1&"])
                 }
             });
 
@@ -272,16 +268,16 @@ namespace Techsola.EmbedDependencies
 
             il.Emit(OpCodes.Call, new MethodReference(
                 "GetTypeFromHandle",
-                returnType: importer[TypeSpecs.SystemType],
-                declaringType: importer[TypeSpecs.SystemType])
+                returnType: helper["class System.Type"],
+                declaringType: helper["class System.Type"])
             {
-                Parameters = { new ParameterDefinition(importer[TypeSpecs.SystemRuntimeTypeHandle]) }
+                Parameters = { new ParameterDefinition(helper["valuetype System.RuntimeTypeHandle"]) }
             });
 
             il.Emit(OpCodes.Callvirt, new MethodReference(
                 "get_Assembly",
-                returnType: importer[TypeSpecs.SystemReflectionAssembly],
-                declaringType: importer[TypeSpecs.SystemType])
+                returnType: helper["class System.Reflection.Assembly"],
+                declaringType: helper["class System.Type"])
             {
                 HasThis = true
             });
@@ -290,8 +286,8 @@ namespace Techsola.EmbedDependencies
 
             il.Emit(OpCodes.Callvirt, new MethodReference(
                 "GetManifestResourceStream",
-                returnType: importer[TypeSpecs.SystemIOStream],
-                declaringType: importer[TypeSpecs.SystemReflectionAssembly])
+                returnType: helper["class [HasStream]System.IO.Stream"],
+                declaringType: helper["class System.Reflection.Assembly"])
             {
                 HasThis = true,
                 Parameters = { new ParameterDefinition(dictionaryField.Module.TypeSystem.String) }
