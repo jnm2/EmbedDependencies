@@ -417,5 +417,97 @@ namespace Techsola.EmbedDependencies.Tests.ILAsmSyntax
 
             field.FieldName.ShouldBe("FieldName");
         }
+
+        [Test]
+        public static void ParseMethodReference_should_throw_ArgumentException_for_whitespace([Values(null, "", " ")] string whitespace)
+        {
+            var ex = Should.Throw<ArgumentException>(() => ILAsmParser.ParseMethodReference(whitespace, P));
+
+            ex.ParamName.ShouldBe("methodReferenceSyntax");
+        }
+
+        [Test]
+        public static void ParseMethodReference_should_throw_FormatException_for_invalid_character()
+        {
+            Should.Throw<FormatException>(() => ILAsmParser.ParseMethodReference("/", P));
+        }
+
+        [Test]
+        public static void Method_reference_with_type_spec()
+        {
+            var method = ILAsmParser.ParseMethodReference("void Foo::Bar()", P);
+
+            method.ReturnType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Void));
+
+            method.DeclaringType.ShouldBe(P.GetTypeFromReference(null, null, "", "Foo"));
+
+            method.MethodName.ShouldBe("Bar");
+        }
+
+        [Test]
+        public static void Method_reference_with_type_reference()
+        {
+            var method = ILAsmParser.ParseMethodReference("void class Foo::Bar()", P);
+
+            method.ReturnType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Void));
+
+            method.DeclaringType.ShouldBe(P.GetTypeFromReference(false, null, "", "Foo"));
+
+            method.MethodName.ShouldBe("Bar");
+        }
+
+        [Test]
+        public static void Static_method()
+        {
+            var method = ILAsmParser.ParseMethodReference("void Foo::Bar()", P);
+
+            method.Instance.ShouldBeFalse();
+            method.InstanceExplicit.ShouldBeFalse();
+            method.ReturnType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Void));
+        }
+
+        [Test]
+        public static void Instance_method()
+        {
+            var method = ILAsmParser.ParseMethodReference("instance void Foo::Bar()", P);
+
+            method.Instance.ShouldBeTrue();
+            method.InstanceExplicit.ShouldBeFalse();
+            method.ReturnType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Void));
+        }
+
+        [Test]
+        public static void Instance_explicit_method()
+        {
+            var method = ILAsmParser.ParseMethodReference("instance explicit void Foo::Bar()", P);
+
+            method.Instance.ShouldBeTrue();
+            method.InstanceExplicit.ShouldBeTrue();
+            method.ReturnType.ShouldBe(P.GetPrimitiveType(PrimitiveTypeCode.Void));
+        }
+
+        [Test]
+        public static void Method_reference_without_type_spec_is_not_supported()
+        {
+            Should.Throw<NotSupportedException>(() => ILAsmParser.ParseMethodReference("void Bar()", P));
+        }
+
+        [Test]
+        public static void Default_calling_convention_may_be_specified()
+        {
+            ILAsmParser.ParseMethodReference("default void Foo::Bar()", P);
+        }
+
+        [Test]
+        public static void Unmanaged_calling_convention_is_not_supported([Values("cdecl", "fastcall", "stdcall", "thiscall")] string unmanagedConvention)
+        {
+            Should.Throw<NotSupportedException>(() => ILAsmParser.ParseMethodReference("unmanaged " + unmanagedConvention + " void Bar()", P));
+        }
+
+        [Test]
+        public static void Vararg_calling_convention_is_not_supported()
+        {
+            Should.Throw<NotSupportedException>(() => ILAsmParser.ParseMethodReference("vararg void Bar()", P));
+        }
     }
 }

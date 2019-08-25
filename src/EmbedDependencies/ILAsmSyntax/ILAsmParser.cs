@@ -14,6 +14,11 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
         {
             return new ILAsmParser<TType>(provider).ParseFieldReference(fieldReferenceSyntax);
         }
+
+        public static MethodReference<TType> ParseMethodReference<TType>(string methodReferenceSyntax, IILAsmTypeSyntaxTypeProvider<TType> provider)
+        {
+            return new ILAsmParser<TType>(provider).ParseMethodReference(methodReferenceSyntax);
+        }
     }
 
     internal sealed class ILAsmParser<TType>
@@ -73,6 +78,92 @@ namespace Techsola.EmbedDependencies.ILAsmSyntax
                 throw new FormatException("Expected identifier following '::'.");
 
             return new FieldReference<TType>(fieldType, declaringType, (string)next.Value);
+        }
+
+        public MethodReference<TType> ParseMethodReference(string methodReferenceSyntax)
+        {
+            // See ECMA 335 page 513, VI.C.4.8 'Instructions that take a method as an argument'
+
+            // <callConv> <type> [ <typeSpec> :: ] <methodName> ( <parameters> )
+
+            var span = (StringSpan)methodReferenceSyntax;
+
+            if (lexer.PeekKind(ref span) == SyntaxKind.End)
+                throw new ArgumentException("Method reference syntax must be specified.", nameof(methodReferenceSyntax));
+
+            ParseCallingConvention(ref span, out var instance, out var instanceExplicit);
+
+            var result = ParseType(ref span);
+            if (!result.Value.IsSome(out var returnType))
+                throw new FormatException(result.PeekedTokenMessage);
+
+            result = ParseTypeSpec(ref span);
+            if (!result.Value.IsSome(out var declaringType))
+                throw new FormatException(result.PeekedTokenMessage);
+
+            var next = lexer.Lex(ref span);
+            if (next.Kind != SyntaxKind.DoubleColonToken)
+            {
+                throw new NotSupportedException($"The {nameof(MethodReference<TType>)} type does not support method references without the type spec and '::' token.");
+            }
+
+            next = lexer.Lex(ref span);
+            if (next.Kind != SyntaxKind.Identifier)
+                throw new FormatException("Expected identifier following '::'.");
+            var methodName = (string)next.Value;
+
+            return new MethodReference<TType>(
+                instance,
+                instanceExplicit,
+                returnType,
+                declaringType,
+                methodName,
+                genericArguments: Array.Empty<TType>(),
+                parameters: Array.Empty<TType>());
+        }
+
+        private void ParseCallingConvention(ref StringSpan span, out bool isInstance, out bool isInstanceExplicit)
+        {
+            // See ECMA 335 page 178, II.15.3 'Calling convention'
+
+            // CallConv ::= [ instance [ explicit ] ] [ CallKind ]
+
+            // CallKind ::=
+            //   default
+            // | unmanaged cdecl
+            // | unmanaged fastcall
+            // | unmanaged stdcall
+            // | unmanaged thiscall
+            // | vararg
+
+            var nextKind = lexer.PeekKind(ref span);
+
+            isInstance = nextKind == SyntaxKind.InstanceKeyword;
+            if (isInstance)
+            {
+                lexer.DiscardPeekedToken();
+
+                isInstanceExplicit = lexer.PeekKind(ref span) == SyntaxKind.ExplicitKeyword;
+                if (isInstanceExplicit)
+                    lexer.DiscardPeekedToken();
+
+                nextKind = lexer.PeekKind(ref span);
+            }
+            else
+            {
+                isInstanceExplicit = false;
+            }
+
+            switch (nextKind)
+            {
+                case SyntaxKind.DefaultKeyword:
+                    lexer.DiscardPeekedToken();
+                    break;
+
+                case SyntaxKind.VarargKeyword:
+                case SyntaxKind.UnmanagedKeyword:
+                    throw new NotSupportedException($"The {nameof(MethodReference<TType>)} type does not support calling conventions other than 'default'.");
+            }
         }
 
         private ParseResult<TType> ParseTypeSpec(ref StringSpan span)
