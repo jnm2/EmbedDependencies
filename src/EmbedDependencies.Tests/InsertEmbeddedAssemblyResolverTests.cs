@@ -1,6 +1,7 @@
 ﻿using NUnit.Framework;
 using System;
 using System.IO;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Techsola.EmbedDependencies.Tests
@@ -31,6 +32,8 @@ namespace Techsola.EmbedDependencies.Tests
                 var assembly = AppDomain.CurrentDomain.Load(stream.ToArray());
 
                 RuntimeHelpers.RunModuleConstructor(assembly.ManifestModule.ModuleHandle);
+
+                AppDomain.CurrentDomain.Load(new AssemblyName { Name = "Foo" });
             }
         }
     }
