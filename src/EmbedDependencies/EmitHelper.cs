@@ -1,18 +1,36 @@
 ﻿using System;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace Techsola.EmbedDependencies
 {
     internal readonly partial struct EmitHelper
     {
-        public EmitHelper(MetadataHelper metadata, ILProcessor il)
+        private readonly MethodBody methodBody;
+
+        public EmitHelper(MetadataHelper metadata, MethodBody methodBody)
         {
+            if (methodBody is null) throw new ArgumentNullException(nameof(methodBody));
+
             Metadata = metadata;
-            IL = il ?? throw new System.ArgumentNullException(nameof(il));
+            this.methodBody = methodBody;
+            IL = methodBody.GetILProcessor();
         }
 
         public MetadataHelper Metadata { get; }
         public ILProcessor IL { get; }
+
+        public VariableDefinition CreateLocal(string ilasmTypeReferenceSyntax)
+        {
+            var local = new VariableDefinition(Metadata.GetTypeReference("string"));
+            methodBody.Variables.Add(local);
+            return local;
+        }
+
+        public void Brtrue_S(Instruction target)
+        {
+            IL.Emit(OpCodes.Brtrue_S, target);
+        }
 
         public void Call(string ilasmMethodReferenceSyntax)
         {
@@ -32,6 +50,93 @@ namespace Techsola.EmbedDependencies
             IL.Emit(OpCodes.Callvirt, method);
         }
 
+        public void Dup()
+        {
+            IL.Emit(OpCodes.Dup);
+        }
+
+        public void Ldarg(int index)
+        {
+            switch (index)
+            {
+                case 0:
+                    IL.Emit(OpCodes.Ldarg_0);
+                    break;
+                case 1:
+                    IL.Emit(OpCodes.Ldarg_1);
+                    break;
+                case 2:
+                    IL.Emit(OpCodes.Ldarg_2);
+                    break;
+                case 3:
+                    IL.Emit(OpCodes.Ldarg_3);
+                    break;
+                default:
+                    if (index <= byte.MaxValue)
+                        IL.Emit(OpCodes.Ldarg_S, (byte)index);
+                    else
+                        IL.Emit(OpCodes.Ldarg, index);
+                    break;
+            }
+        }
+
+        public void Ldftn(MethodReference method)
+        {
+            IL.Emit(OpCodes.Ldftn, method);
+        }
+
+        public void Ldloc(VariableDefinition variable)
+        {
+            var index = variable.Index;
+
+            switch (index)
+            {
+                case 0:
+                    IL.Emit(OpCodes.Ldloc_0);
+                    break;
+                case 1:
+                    IL.Emit(OpCodes.Ldloc_1);
+                    break;
+                case 2:
+                    IL.Emit(OpCodes.Ldloc_2);
+                    break;
+                case 3:
+                    IL.Emit(OpCodes.Ldloc_3);
+                    break;
+                default:
+                    if (index <= byte.MaxValue)
+                        IL.Emit(OpCodes.Ldloc_S, (byte)index);
+                    else
+                        IL.Emit(OpCodes.Ldloc, index);
+                    break;
+            }
+        }
+
+        public void Ldloca(VariableDefinition variable)
+        {
+            var index = variable.Index;
+
+            if (index <= byte.MaxValue)
+                IL.Emit(OpCodes.Ldloca_S, (byte)index);
+            else
+                IL.Emit(OpCodes.Ldloca, index);
+        }
+
+        public void Ldnull()
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+
+        public void Ldsfld(FieldReference field)
+        {
+            IL.Emit(OpCodes.Ldsfld, field);
+        }
+
+        public void Ldstr(string value)
+        {
+            IL.Emit(OpCodes.Ldstr, value);
+        }
+
         public void Newobj(string ilasmMethodReferenceSyntax)
         {
             var method = Metadata.GetMethodReference(ilasmMethodReferenceSyntax);
@@ -41,6 +146,16 @@ namespace Techsola.EmbedDependencies
                 nameof(ilasmMethodReferenceSyntax));
 
             IL.Emit(OpCodes.Newobj, method);
+        }
+
+        public void Ret()
+        {
+            IL.Emit(OpCodes.Ret);
+        }
+
+        public void Stsfld(FieldReference field)
+        {
+            IL.Emit(OpCodes.Stsfld, field);
         }
     }
 }

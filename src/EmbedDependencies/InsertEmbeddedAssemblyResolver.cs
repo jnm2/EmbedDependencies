@@ -85,9 +85,9 @@ namespace Techsola.EmbedDependencies
         }
 
         private static MethodDefinition CreateModuleInitializer(
-            FieldDefinition dictionaryField,
+            FieldReference dictionaryField,
             IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName,
-            MethodDefinition assemblyResolveHandler,
+            MethodReference assemblyResolveHandler,
             MetadataHelper helper)
         {
             var moduleInitializer = new MethodDefinition(
@@ -125,43 +125,33 @@ namespace Techsola.EmbedDependencies
 
         private static void GenerateDictionaryInitializationIL(
             EmitHelper emit,
-            FieldDefinition dictionaryField,
+            FieldReference dictionaryField,
             IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName)
         {
             emit.Call("class [HasStringComparer]System.StringComparer class [HasStringComparer]System.StringComparer::get_OrdinalIgnoreCase()");
-
             emit.Newobj(@"
                 instance void class [HasCollections]System.Collections.Generic.Dictionary`2<string, string>::.ctor(
                     class [CoreLibrary]System.Collections.Generic.IEqualityComparer`1<!0>)");
 
-            var il = emit.IL;
-
             foreach (var entry in embeddedResourceNamesByAssemblyName)
             {
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Ldstr, entry.Key);
-                il.Emit(OpCodes.Ldstr, entry.Value);
-
+                emit.Dup();
+                emit.Ldstr(entry.Key);
+                emit.Ldstr(entry.Value);
                 emit.Callvirt("instance void class [HasCollections]System.Collections.Generic.Dictionary`2<string, string>::set_Item(!0, !1)");
             }
 
-            il.Emit(OpCodes.Stsfld, dictionaryField);
+            emit.Stsfld(dictionaryField);
         }
 
-        private static void GenerateAppDomainModuleInitializerIL(EmitHelper emit, MethodDefinition assemblyResolveHandler)
+        private static void GenerateAppDomainModuleInitializerIL(EmitHelper emit, MethodReference assemblyResolveHandler)
         {
-            var il = emit.IL;
-
             emit.Call("class [HasAppDomain]System.AppDomain class [HasAppDomain]System.AppDomain::get_CurrentDomain()");
-
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldftn, assemblyResolveHandler);
-
+            emit.Ldnull();
+            emit.Ldftn(assemblyResolveHandler);
             emit.Newobj("instance void class [HasAppDomain]System.ResolveEventHandler::.ctor(object, native int)");
-
             emit.Callvirt("instance void class [HasAppDomain]System.AppDomain::add_AssemblyResolve(class [HasAppDomain]System.ResolveEventHandler)");
-
-            il.Emit(OpCodes.Ret);
+            emit.Ret();
         }
 
         private static FieldDefinition CreateDictionaryField(MetadataHelper helper)
@@ -186,17 +176,17 @@ namespace Techsola.EmbedDependencies
                 }
             };
 
-            var il = handler.Body.GetILProcessor();
+            var emit = helper.GetEmitHelper(handler);
 
             // TODO
 
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ret);
+            emit.Ldnull();
+            emit.Ret();
 
             return handler;
         }
 
-        private static MethodDefinition CreateGetResourceAssemblyStreamOrNullMethod(FieldDefinition dictionaryField, TypeDefinition moduleType, MetadataHelper helper)
+        private static MethodDefinition CreateGetResourceAssemblyStreamOrNullMethod(FieldReference dictionaryField, TypeReference moduleType, MetadataHelper helper)
         {
             var method = new MethodDefinition(
                 "GetResourceAssemblyStreamOrNull",
@@ -207,36 +197,28 @@ namespace Techsola.EmbedDependencies
             };
 
             var emit = helper.GetEmitHelper(method);
-            var il = emit.IL;
 
-            il.Emit(OpCodes.Ldsfld, dictionaryField);
-            il.Emit(OpCodes.Ldarg_0);
-
+            emit.Ldsfld(dictionaryField);
+            emit.Ldarg(0);
             emit.Callvirt("instance string class System.Reflection.AssemblyName::get_Name()");
 
-            var resourceNameVariable = new VariableDefinition(helper.GetTypeReference("string"));
-            method.Body.Variables.Add(resourceNameVariable);
-            il.Emit(OpCodes.Ldloca_S, resourceNameVariable);
-
+            var resourceNameVariable = emit.CreateLocal("string");
+            emit.Ldloca(resourceNameVariable);
             emit.Callvirt("instance bool class [HasCollections]System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)");
 
-            var successBranch = il.Create(OpCodes.Ldtoken, moduleType);
+            var successBranch = emit.IL.Create(OpCodes.Ldtoken, moduleType);
 
-            il.Emit(OpCodes.Brtrue_S, successBranch);
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ret);
+            emit.Brtrue_S(successBranch);
+            emit.Ldnull();
+            emit.Ret();
 
-            il.Append(successBranch);
+            emit.IL.Append(successBranch);
 
             emit.Call("class System.Type System.Type::GetTypeFromHandle(valuetype System.RuntimeTypeHandle)");
-
             emit.Callvirt("instance class System.Reflection.Assembly System.Type::get_Assembly()");
-
-            il.Emit(OpCodes.Ldloc_0);
-
+            emit.Ldloc(resourceNameVariable);
             emit.Callvirt("instance class System.IO.Stream System.Reflection.Assembly::GetManifestResourceStream(string)");
-
-            il.Emit(OpCodes.Ret);
+            emit.Ret();
 
             return method;
         }

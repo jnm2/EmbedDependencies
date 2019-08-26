@@ -19,7 +19,7 @@ namespace Techsola.EmbedDependencies
 
         public EmitHelper GetEmitHelper(MethodDefinition methodDefinition)
         {
-            return new EmitHelper(this, methodDefinition.Body.GetILProcessor());
+            return new EmitHelper(this, methodDefinition.Body);
         }
 
         public TypeReference GetTypeReference(string ilasmSyntax)
