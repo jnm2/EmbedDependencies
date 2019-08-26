@@ -77,7 +77,8 @@ namespace Techsola.EmbedDependencies
 
             return new MetadataHelper(
                 module,
-                new Dictionary<string, IMetadataScope> { ["_"] = baselineScope });
+                new Dictionary<string, IMetadataScope>(),
+                baselineScope);
         }
 
         private static MethodDefinition CreateModuleInitializer(
@@ -124,17 +125,17 @@ namespace Techsola.EmbedDependencies
             FieldReference dictionaryField,
             IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName)
         {
-            emit.Call("class [_]System.StringComparer class [_]System.StringComparer::get_OrdinalIgnoreCase()");
+            emit.Call("class System.StringComparer class System.StringComparer::get_OrdinalIgnoreCase()");
             emit.Newobj(@"
-                instance void class [_]System.Collections.Generic.Dictionary`2<string, string>::.ctor(
-                    class [_]System.Collections.Generic.IEqualityComparer`1<!0>)");
+                instance void class System.Collections.Generic.Dictionary`2<string, string>::.ctor(
+                    class System.Collections.Generic.IEqualityComparer`1<!0>)");
 
             foreach (var entry in embeddedResourceNamesByAssemblyName)
             {
                 emit.Dup();
                 emit.Ldstr(entry.Key);
                 emit.Ldstr(entry.Value);
-                emit.Callvirt("instance void class [_]System.Collections.Generic.Dictionary`2<string, string>::set_Item(!0, !1)");
+                emit.Callvirt("instance void class System.Collections.Generic.Dictionary`2<string, string>::set_Item(!0, !1)");
             }
 
             emit.Stsfld(dictionaryField);
@@ -142,11 +143,11 @@ namespace Techsola.EmbedDependencies
 
         private static void GenerateAppDomainModuleInitializerIL(EmitHelper emit, MethodReference assemblyResolveHandler)
         {
-            emit.Call("class [_]System.AppDomain class [_]System.AppDomain::get_CurrentDomain()");
+            emit.Call("class System.AppDomain class System.AppDomain::get_CurrentDomain()");
             emit.Ldnull();
             emit.Ldftn(assemblyResolveHandler);
-            emit.Newobj("instance void class [_]System.ResolveEventHandler::.ctor(object, native int)");
-            emit.Callvirt("instance void class [_]System.AppDomain::add_AssemblyResolve(class [_]System.ResolveEventHandler)");
+            emit.Newobj("instance void class System.ResolveEventHandler::.ctor(object, native int)");
+            emit.Callvirt("instance void class System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)");
             emit.Ret();
         }
 
@@ -155,7 +156,7 @@ namespace Techsola.EmbedDependencies
             return new FieldDefinition(
                 "EmbeddedResourceNamesByAssemblyName",
                 FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly,
-                helper.GetTypeReference("class [_]System.Collections.Generic.Dictionary`2<string, string>"));
+                helper.GetTypeReference("class System.Collections.Generic.Dictionary`2<string, string>"));
         }
 
         private static MethodDefinition CreateAppDomainAssemblyResolveHandler(MetadataHelper helper)
@@ -168,7 +169,7 @@ namespace Techsola.EmbedDependencies
                 Parameters =
                 {
                     new ParameterDefinition(helper.GetTypeReference("object")),
-                    new ParameterDefinition(helper.GetTypeReference("class [_]System.ResolveEventArgs"))
+                    new ParameterDefinition(helper.GetTypeReference("class System.ResolveEventArgs"))
                 }
             };
 
@@ -187,7 +188,7 @@ namespace Techsola.EmbedDependencies
             var method = new MethodDefinition(
                 "GetResourceAssemblyStreamOrNull",
                 MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
-                returnType: helper.GetTypeReference("class [_]System.IO.Stream"))
+                returnType: helper.GetTypeReference("class System.IO.Stream"))
             {
                 Parameters = { new ParameterDefinition(helper.GetTypeReference("class System.Reflection.AssemblyName")) }
             };
@@ -200,7 +201,7 @@ namespace Techsola.EmbedDependencies
 
             var resourceNameVariable = emit.CreateLocal("string");
             emit.Ldloca(resourceNameVariable);
-            emit.Callvirt("instance bool class [_]System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)");
+            emit.Callvirt("instance bool class System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)");
 
             var successBranch = emit.IL.Create(OpCodes.Ldtoken, moduleType);
 

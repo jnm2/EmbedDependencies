@@ -10,11 +10,16 @@ namespace Techsola.EmbedDependencies
     {
         private readonly ModuleDefinition module;
         private readonly Func<string, IMetadataScope> getScopeForAssemblyName;
+        private readonly IMetadataScope overrideImplicitScope;
 
-        public MonoCecilTypeProvider(ModuleDefinition module, Func<string, IMetadataScope> getScopeForAssemblyName)
+        public MonoCecilTypeProvider(
+            ModuleDefinition module,
+            Func<string, IMetadataScope> getScopeForAssemblyName,
+            IMetadataScope overrideImplicitScope = null)
         {
             this.module = module ?? throw new ArgumentNullException(nameof(module));
             this.getScopeForAssemblyName = getScopeForAssemblyName ?? throw new ArgumentNullException(nameof(getScopeForAssemblyName));
+            this.overrideImplicitScope = overrideImplicitScope;
         }
 
         public TypeReference GetArrayType(TypeReference elementType, int rank)
@@ -115,7 +120,9 @@ namespace Techsola.EmbedDependencies
 
         public TypeReference GetTypeFromReference(bool? isValueType, string assemblyName, string namespaceName, string topLevelTypeName, IReadOnlyList<string> nestedTypeNames)
         {
-            var scope = assemblyName is null ? null : getScopeForAssemblyName.Invoke(assemblyName);
+            var scope = assemblyName is null
+                ? overrideImplicitScope
+                : getScopeForAssemblyName.Invoke(assemblyName);
 
             var type = new TypeReference(namespaceName, topLevelTypeName, module, scope);
 

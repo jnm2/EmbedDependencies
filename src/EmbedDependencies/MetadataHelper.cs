@@ -8,13 +8,19 @@ namespace Techsola.EmbedDependencies
 {
     internal readonly struct MetadataHelper
     {
-        private readonly ModuleDefinition module;
         private readonly IReadOnlyDictionary<string, IMetadataScope> scopesByAssemblyMoniker;
+        private readonly IILAsmTypeSyntaxTypeProvider<TypeReference> typeProvider;
 
-        public MetadataHelper(ModuleDefinition module, IReadOnlyDictionary<string, IMetadataScope> scopesByAssemblyMoniker)
+        public MetadataHelper(
+            ModuleDefinition module,
+            IReadOnlyDictionary<string, IMetadataScope> scopesByAssemblyMoniker,
+            IMetadataScope overrideImplicitScope = null)
         {
-            this.module = module ?? throw new ArgumentNullException(nameof(module));
+            if (module is null) throw new ArgumentNullException(nameof(module));
             this.scopesByAssemblyMoniker = scopesByAssemblyMoniker ?? throw new ArgumentNullException(nameof(scopesByAssemblyMoniker));
+
+            typeProvider = null;
+            typeProvider = new MonoCecilTypeProvider(module, GetScopeForAssemblyName, overrideImplicitScope);
         }
 
         public EmitHelper GetEmitHelper(MethodDefinition methodDefinition)
@@ -24,19 +30,19 @@ namespace Techsola.EmbedDependencies
 
         public TypeReference GetTypeReference(string ilasmSyntax)
         {
-            return ILAsmParser.ParseType(ilasmSyntax, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
+            return ILAsmParser.ParseType(ilasmSyntax, typeProvider);
         }
 
         public FieldReference GetFieldReference(string ilasmSyntax)
         {
-            var field = ILAsmParser.ParseFieldReference(ilasmSyntax, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
+            var field = ILAsmParser.ParseFieldReference(ilasmSyntax, typeProvider);
 
             return new FieldReference(field.FieldName, field.FieldType, field.DeclaringType);
         }
 
         public MethodReference GetMethodReference(string ilasmSyntax)
         {
-            var result = ILAsmParser.ParseMethodReference(ilasmSyntax, new MonoCecilTypeProvider(module, GetScopeForAssemblyName));
+            var result = ILAsmParser.ParseMethodReference(ilasmSyntax, typeProvider);
 
             var method = new MethodReference(result.MethodName, result.ReturnType, result.DeclaringType)
             {
