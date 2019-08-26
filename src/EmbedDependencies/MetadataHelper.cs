@@ -63,6 +63,25 @@ namespace Techsola.EmbedDependencies
             return genericInstantiation;
         }
 
+        public MethodDefinition DefineMethod(
+            string name,
+            MethodAttributes attributes,
+            string returnType,
+            IEnumerable<string> parameterTypes = null)
+        {
+            var method = new MethodDefinition(name, attributes, GetTypeReference(returnType));
+
+            if (parameterTypes != null)
+            {
+                foreach (var parameterType in parameterTypes)
+                {
+                    method.Parameters.Add(new ParameterDefinition(GetTypeReference(parameterType)));
+                }
+            }
+
+            return method;
+        }
+
         private IMetadataScope GetScopeForAssemblyName(string assemblyName)
         {
             return scopesByAssemblyMoniker.TryGetValue(assemblyName, out var scope)

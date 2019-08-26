@@ -70,10 +70,10 @@ namespace Techsola.EmbedDependencies
             //     AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
             // }
 
-            var moduleInitializer = new MethodDefinition(
+            var moduleInitializer = helper.DefineMethod(
                 ".cctor",
                 MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
-                helper.GetTypeReference("void"));
+                returnType: "void");
 
             var emit = helper.GetEmitHelper(moduleInitializer);
 
@@ -133,17 +133,11 @@ namespace Techsola.EmbedDependencies
             //     }
             // }
 
-            var handler = new MethodDefinition(
+            var handler = helper.DefineMethod(
                 "OnAssemblyResolve",
                 MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
-                returnType: helper.GetTypeReference("class System.Reflection.Assembly"))
-            {
-                Parameters =
-                {
-                    new ParameterDefinition(helper.GetTypeReference("object")),
-                    new ParameterDefinition(helper.GetTypeReference("class System.ResolveEventArgs"))
-                }
-            };
+                returnType: "class System.Reflection.Assembly",
+                parameterTypes: new[] { "object", "class System.ResolveEventArgs" });
 
             var emit = helper.GetEmitHelper(handler);
 
@@ -165,13 +159,11 @@ namespace Techsola.EmbedDependencies
             //         : null;
             // }
 
-            var method = new MethodDefinition(
+            var method = helper.DefineMethod(
                 "GetResourceAssemblyStreamOrNull",
                 MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
-                returnType: helper.GetTypeReference("class System.IO.Stream"))
-            {
-                Parameters = { new ParameterDefinition(helper.GetTypeReference("class System.Reflection.AssemblyName")) }
-            };
+                returnType: "class System.IO.Stream",
+                parameterTypes: new[] { "class System.Reflection.AssemblyName" });
 
             var emit = helper.GetEmitHelper(method);
 
