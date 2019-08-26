@@ -27,6 +27,11 @@ namespace Techsola.EmbedDependencies
             return local;
         }
 
+        public void Brfalse_S(Instruction target)
+        {
+            IL.Emit(OpCodes.Brfalse_S, target);
+        }
+
         public void Brtrue_S(Instruction target)
         {
             IL.Emit(OpCodes.Brtrue_S, target);
@@ -36,6 +41,11 @@ namespace Techsola.EmbedDependencies
         {
             var method = Metadata.GetMethodReference(ilasmMethodReferenceSyntax);
 
+            IL.Emit(OpCodes.Call, method);
+        }
+
+        public void Call(MethodReference method)
+        {
             IL.Emit(OpCodes.Call, method);
         }
 
@@ -50,9 +60,19 @@ namespace Techsola.EmbedDependencies
             IL.Emit(OpCodes.Callvirt, method);
         }
 
+        public void Conv_Ovf_I4()
+        {
+            IL.Emit(OpCodes.Conv_Ovf_I4);
+        }
+
         public void Dup()
         {
             IL.Emit(OpCodes.Dup);
+        }
+
+        public void Endfinally()
+        {
+            IL.Emit(OpCodes.Endfinally);
         }
 
         public void Ldarg(int index)
@@ -137,6 +157,11 @@ namespace Techsola.EmbedDependencies
             IL.Emit(OpCodes.Ldstr, value);
         }
 
+        public void Leave_S(Instruction target)
+        {
+            IL.Emit(OpCodes.Leave_S, target);
+        }
+
         public void Newobj(string ilasmMethodReferenceSyntax)
         {
             var method = Metadata.GetMethodReference(ilasmMethodReferenceSyntax);
@@ -151,6 +176,33 @@ namespace Techsola.EmbedDependencies
         public void Ret()
         {
             IL.Emit(OpCodes.Ret);
+        }
+
+        public void Stloc(VariableDefinition variable)
+        {
+            var index = variable.Index;
+
+            switch (index)
+            {
+                case 0:
+                    IL.Emit(OpCodes.Stloc_0);
+                    break;
+                case 1:
+                    IL.Emit(OpCodes.Stloc_1);
+                    break;
+                case 2:
+                    IL.Emit(OpCodes.Stloc_2);
+                    break;
+                case 3:
+                    IL.Emit(OpCodes.Stloc_3);
+                    break;
+                default:
+                    if (index <= byte.MaxValue)
+                        IL.Emit(OpCodes.Stloc_S, (byte)index);
+                    else
+                        IL.Emit(OpCodes.Stloc, index);
+                    break;
+            }
         }
 
         public void Stsfld(FieldReference field)

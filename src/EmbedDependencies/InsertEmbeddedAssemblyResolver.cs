@@ -43,7 +43,7 @@ namespace Techsola.EmbedDependencies
             var getResourceAssemblyStreamOrNullMethod = CreateGetResourceAssemblyStreamOrNullMethod(dictionaryField, moduleType, helper);
             moduleType.Methods.Add(getResourceAssemblyStreamOrNullMethod);
 
-            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(helper);
+            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(getResourceAssemblyStreamOrNullMethod, helper);
             moduleType.Methods.Add(assemblyResolveHandler);
 
             var moduleInitializer = CreateModuleInitializer(dictionaryField, embeddedResourceNamesByAssemblyName, assemblyResolveHandler, helper);
@@ -116,7 +116,7 @@ namespace Techsola.EmbedDependencies
                 helper.GetTypeReference("class System.Collections.Generic.Dictionary`2<string, string>"));
         }
 
-        private static MethodDefinition CreateAppDomainAssemblyResolveHandler(MetadataHelper helper)
+        private static MethodDefinition CreateAppDomainAssemblyResolveHandler(MethodReference getResourceAssemblyStreamOrNullMethod, MetadataHelper helper)
         {
             // C#:
             // private static Assembly OnAssemblyResolve(object sender, ResolveEventArgs e)
@@ -133,20 +133,79 @@ namespace Techsola.EmbedDependencies
             //     }
             // }
 
-            var handler = helper.DefineMethod(
+            var method = helper.DefineMethod(
                 "OnAssemblyResolve",
                 MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
                 returnType: "class System.Reflection.Assembly",
                 parameterTypes: new[] { "object", "class System.ResolveEventArgs" });
 
-            var emit = helper.GetEmitHelper(handler);
+            var emit = helper.GetEmitHelper(method);
+            var streamLocal = emit.CreateLocal("class System.IO.Stream");
+            var assemblyLocal = emit.CreateLocal("classSystem.Reflection.Assembly");
+            var bufferLocal = emit.CreateLocal("class System.IO.MemoryStream");
 
-            // TODO
+            emit.Ldarg(1);
+            emit.Callvirt("instance string System.ResolveEventArgs::get_Name()");
+            emit.Newobj("instance void System.Reflection.AssemblyName::.ctor(string)");
+            emit.Call(getResourceAssemblyStreamOrNullMethod);
+            emit.Stloc(streamLocal);
+
+            var loadReturnValue = emit.IL.Create(OpCodes.Ldloc, assemblyLocal);
+            var skipReturningNull = emit.IL.Create(OpCodes.Ldloc, streamLocal);
+
+            // try
+            emit.Ldloc(streamLocal);
+            emit.Brtrue_S(skipReturningNull);
 
             emit.Ldnull();
+            emit.Stloc(assemblyLocal);
+            emit.Leave_S(loadReturnValue);
+
+            emit.IL.Append(skipReturningNull);
+            emit.Callvirt("instance int64 System.IO.Stream::get_Length()");
+            emit.Conv_Ovf_I4();
+            emit.Newobj("instance void System.IO.MemoryStream::.ctor(int32)");
+            emit.Stloc(bufferLocal);
+
+            // try
+            emit.Ldloc(streamLocal);
+            emit.Ldloc(bufferLocal);
+            emit.Callvirt("instance void System.IO.Stream::CopyTo(class System.IO.Stream)");
+            emit.Ldloc(bufferLocal);
+            emit.Callvirt("instance unsigned int8[] System.IO.MemoryStream::ToArray()");
+            emit.Call("class System.Reflection.Assembly System.Reflection.Assembly::Load(unsigned int8[])");
+            emit.Stloc(assemblyLocal);
+            emit.Leave_S(loadReturnValue);
+
+            // finally
+            var endFinally = emit.IL.Create(OpCodes.Endfinally);
+            emit.Ldloc(bufferLocal);
+            emit.Brfalse_S(endFinally);
+            emit.Ldloc(bufferLocal);
+            emit.Callvirt("instance void System.IDisposable::Dispose()");
+            emit.IL.Append(endFinally);
+
+            // finally
+            endFinally = emit.IL.Create(OpCodes.Endfinally);
+            emit.Ldloc(streamLocal);
+            emit.Brfalse_S(endFinally);
+            emit.Ldloc(streamLocal);
+            emit.Callvirt("instance void System.IDisposable::Dispose()");
+            emit.IL.Append(endFinally);
+
+            emit.IL.Append(loadReturnValue);
             emit.Ret();
 
-            return handler;
+            /*
+            method.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally)
+            {
+               TryStart = ,
+               TryEnd = ,
+               HandlerStart = ,
+               HandlerEnd =
+            });*/
+
+            return method;
         }
 
         private static MethodDefinition CreateGetResourceAssemblyStreamOrNullMethod(FieldReference dictionaryField, TypeReference moduleType, MetadataHelper helper)
@@ -179,14 +238,6 @@ namespace Techsola.EmbedDependencies
 
             emit.Brtrue_S(successBranch);
             emit.Ldnull();
-            emit.Ret();
-
-            emit.IL.Append(successBranch);
-
-            emit.Call("class System.Type System.Type::GetTypeFromHandle(valuetype System.RuntimeTypeHandle)");
-            emit.Callvirt("instance class System.Reflection.Assembly System.Type::get_Assembly()");
-            emit.Ldloc(resourceNameVariable);
-            emit.Callvirt("instance class System.IO.Stream System.Reflection.Assembly::GetManifestResourceStream(string)");
             emit.Ret();
 
             return method;
