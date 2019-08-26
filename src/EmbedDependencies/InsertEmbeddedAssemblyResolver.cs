@@ -2,14 +2,12 @@
 using Microsoft.Build.Utilities;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 namespace Techsola.EmbedDependencies
 {
-    // Template: https://sharplab.io/#v2:EYLgxg9gTgpgtADwGwBYA0AXEBLANgHwAEAmARgFgAoQgBgAJDSUBuK2h0gOgEkB5V6vUacASjABmuGGAzYIAOwHthIgK7zZAWxicAMhACGAExhQBbUkgbE6AWQhHVUqgG8qdD3QD0Xut3F0nAByAKIAKnQAwtAw7p4ADlDYAG4GGDAcVgCCAM45MJrAuACedAAiEgZOGAD6YjkQuMnY8gDmABS5+YUl+sbRGjAIGHSQg8NodF0FRcVBBtp08gswAJRxHm6UnjsM9O2pUHQ5GLALdAC8dGFQxQDiMBj1EKpQYDDTPcUAyqcwC+1ltpVuttrtNhtwZ5sAF2iczpo6NgcksnLhVgwAOyo3C4ARQ3aEbFjdLDPSGIwAMSgEE0vwRcL+C1W+KhAF9IRywR5IT46LwMAALUwAd2RsW5dESKTSGUY2TyMxK/Pkn1mzyaMHaEGAACtpCN8vITFBJhrkjAQhaNFkoK0UWtIVsCewDgYjvD/oirjd7o9nq93mqSvSvYCYCKpoqvvNtO0dLG1iDITtnQTobDPedkTj0Vjc6z03QU1DXYc6MBVOJxKZLksI3YCtAfkzNO0wAZ4gYwNgMMUQKNhWAANYwIztdotDCrLOaPQwNpCkGgosQyWr46tzjReLFMIQdqV6umFkl8EASCJUe6s3JxkPVZrUE4+9tUAMxXaIML6a5BLZnicpCkLSqk6SZHQobnL6DxPDADSBh80azFBbbBnMKx0AYyElImK6eGm4JXiEhRjiYRgBm8MCJjkABCxToYmL63LBABqBi4KoWrYTeuErMEKyTC8IzlrACFUXhZ67AA/HQfbxDAEDiO09iOFIqycOhnCwbYBjyDC8FweJ7yoe0YkvBJKz4UWA7yGiP5/oBkqgbKEFnEYCjKmU2AyHIyy3AAPIwNCTMFAB8dAkcAZFjpR7w0fRjErFJVzyA23m+Qo7rFEFpAhRwNBhe09ItK00SaF2sDPrwUBGC0HHcK08gxJE2GOuuBFSTsADaABEYSGehvUALp1oQhC9cG2DwQAOgNJxaUYuK9VJbICFyQA=
+    // Template: https://sharplab.io/#v2:EYLgxg9gTgpgtADwGwBYA0AXEBLANgHwAEAmARgFgAoQgBgAJDSUBuK2h0gOgEkB5V6vUacASjABmuGGAzYIAOwHthIgK7zZAWxicAMhACGAExhQBbUkgbE6AWQhHVUqgG8qdDxyv3HUgBQAlO6ebpSe4XQAggAO0QAiEJoG2PKcAMKqULAaCUkpnJEAzoUwmsC4AJ5ihRC4AG4wdADUALx0vPJFJWWV1bUNAuEAvsEeo3QA9BN03OJ0nAByAKIAKnRp0DDj0VDYdQYYjYxWXaXlFXRxEgZOGAD6ffUpAOZ+pz0V+sYbGjAIGHRIL9/mgosUzpUFgZtHR5NCYEEwiFxuF2H59lA6IUMLBoXQ2gBxGAYPqZMAwd7nADKOJg0N4UAWTlwfjh2gCiIiyKRXPC2DmfmxuM0dGwhVhzICDAA7BLcLhBrzUbKgYd/npDEYAGJQRI04WC2nQgKKrkjHl0c3hcZTdoYAAWpgA7mKthadnsDkdLGDuud2p1wR9Hg0/BBgAAraQAkryExQUEhmBLBoaSJQZ7ihHjUJKtEYrFGkWE4mkqDkymVfV0zQMpny1kwJ2+iEVKHaPw6dsIjko7lKvkCoU10Xi+SSmVyhV9rkziL5gyY4CqcTiUz42FNuylaAVavQvxgAzRAxgbAYCogQGOsAAaxgRj8fhSGACw+hehg8meDo5nIHHi5gBETvpo6QQNEFQrBAfjLqupgmnO4QAJCELKlYVBqxiwSua5QJw0HplABgVIEiEWkqVq8kMnjjFRYzurs+yHF4dD7iKRIkjANRkhSQbUkWdbMm8/GQvCdAGKJbbwv+gFzmhdBLGUD4mEYZbkt2hQAEIVBh3YEVAFScQAagYuCqDAfiSX6YnaIs8KghAqgAgWsA8eWMDdrJA4APx0Be0QwBA4h+D4TgIgUUmcJxtgGPI/LcVx7nkuxfhuU5HleUhnhXuO8qmpa4zbExXqsbiRgKJUlzYDIchwoZAA8jA0KCzUAHyKcpRiqepnnwtpulSd2c5tPIW5xDVsgKIuFRNaQLUcDQbV+PqLwbJoJ6wPhDJGCkZncM88ibGkknZhR/bAQA2gARFSiQ6Bh9naNdAC6G6EIQt33QAOkpwAqQ+329d9AAKBz2tdaBzshN3EmAr0btdcPXXOQwCOaQA===
 
     public sealed class InsertEmbeddedAssemblyResolver : Task
     {
@@ -60,6 +58,18 @@ namespace Techsola.EmbedDependencies
             MethodReference assemblyResolveHandler,
             MetadataHelper helper)
         {
+            // C#:
+            // static <Module>()
+            // {
+            //     EmbeddedResourceNamesByAssemblyName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            //     {
+            //         ["Some.Assembly.Name"] = @"Some\Embedded\Resource\Path",
+            //         ["etc"] = "etc"
+            //     };
+            //
+            //     AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
+            // }
+
             var moduleInitializer = new MethodDefinition(
                 ".cctor",
                 MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -67,18 +77,7 @@ namespace Techsola.EmbedDependencies
 
             var emit = helper.GetEmitHelper(moduleInitializer);
 
-            GenerateDictionaryInitializationIL(emit, dictionaryField, embeddedResourceNamesByAssemblyName);
-
-            GenerateAppDomainModuleInitializerIL(emit, assemblyResolveHandler);
-
-            return moduleInitializer;
-        }
-
-        private static void GenerateDictionaryInitializationIL(
-            EmitHelper emit,
-            FieldReference dictionaryField,
-            IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName)
-        {
+            // Initialize dictionary field
             emit.Call("class System.StringComparer class System.StringComparer::get_OrdinalIgnoreCase()");
             emit.Newobj(@"
                 instance void class System.Collections.Generic.Dictionary`2<string, string>::.ctor(
@@ -93,20 +92,24 @@ namespace Techsola.EmbedDependencies
             }
 
             emit.Stsfld(dictionaryField);
-        }
 
-        private static void GenerateAppDomainModuleInitializerIL(EmitHelper emit, MethodReference assemblyResolveHandler)
-        {
+            // Add AssemblyResolve handler
             emit.Call("class System.AppDomain class System.AppDomain::get_CurrentDomain()");
             emit.Ldnull();
             emit.Ldftn(assemblyResolveHandler);
             emit.Newobj("instance void class System.ResolveEventHandler::.ctor(object, native int)");
             emit.Callvirt("instance void class System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)");
+
             emit.Ret();
+
+            return moduleInitializer;
         }
 
         private static FieldDefinition CreateDictionaryField(MetadataHelper helper)
         {
+            // C#:
+            // private static readonly Dictionary<string, string> EmbeddedResourceNamesByAssemblyName;
+
             return new FieldDefinition(
                 "EmbeddedResourceNamesByAssemblyName",
                 FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly,
@@ -115,6 +118,21 @@ namespace Techsola.EmbedDependencies
 
         private static MethodDefinition CreateAppDomainAssemblyResolveHandler(MetadataHelper helper)
         {
+            // C#:
+            // private static Assembly OnAssemblyResolve(object sender, ResolveEventArgs e)
+            // {
+            //     using (var stream = GetResourceAssemblyStreamOrNull(new AssemblyName(e.Name)))
+            //     {
+            //         if (stream is null) return null;
+            //
+            //         using (var buffer = new MemoryStream(capacity: checked((int)stream.Length)))
+            //         {
+            //             stream.CopyTo(buffer);
+            //             return Assembly.Load(buffer.ToArray());
+            //         }
+            //     }
+            // }
+
             var handler = new MethodDefinition(
                 "OnAssemblyResolve",
                 MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
@@ -139,6 +157,14 @@ namespace Techsola.EmbedDependencies
 
         private static MethodDefinition CreateGetResourceAssemblyStreamOrNullMethod(FieldReference dictionaryField, TypeReference moduleType, MetadataHelper helper)
         {
+            // C#:
+            // private static Stream GetResourceAssemblyStreamOrNull(AssemblyName assemblyName)
+            // {
+            //     return EmbeddedResourceNamesByAssemblyName.TryGetValue(assemblyName.Name, out var resourceName)
+            //         ? typeof(Module).Assembly.GetManifestResourceStream(resourceName)
+            //         : null;
+            // }
+
             var method = new MethodDefinition(
                 "GetResourceAssemblyStreamOrNull",
                 MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
