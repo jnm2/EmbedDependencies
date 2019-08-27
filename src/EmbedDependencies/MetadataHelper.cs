@@ -2,11 +2,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Techsola.EmbedDependencies.Emit;
 using Techsola.EmbedDependencies.ILAsmSyntax;
 
 namespace Techsola.EmbedDependencies
 {
-    internal readonly struct MetadataHelper
+    internal readonly struct MetadataHelper : ISyntaxProvider
     {
         private readonly IReadOnlyDictionary<string, IMetadataScope> scopesByAssemblyMoniker;
         private readonly IILAsmTypeSyntaxTypeProvider<TypeReference> typeProvider;
@@ -26,6 +27,11 @@ namespace Techsola.EmbedDependencies
         public EmitHelper GetEmitHelper(MethodDefinition methodDefinition)
         {
             return new EmitHelper(this, methodDefinition.Body);
+        }
+
+        public Emitter GetEmitter(MethodDefinition methodDefinition)
+        {
+            return new Emitter(methodDefinition.Body, this);
         }
 
         public TypeReference GetTypeReference(string ilasmSyntax)

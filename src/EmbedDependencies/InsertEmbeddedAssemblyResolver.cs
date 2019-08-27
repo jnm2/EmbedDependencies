@@ -1,9 +1,10 @@
 ﻿using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
 using System.Collections.Generic;
 using System.IO;
+using Techsola.EmbedDependencies.Emit;
+using static Techsola.EmbedDependencies.Emit.Elements;
 
 namespace Techsola.EmbedDependencies
 {
@@ -140,6 +141,7 @@ namespace Techsola.EmbedDependencies
                 parameterTypes: new[] { "object", "class System.ResolveEventArgs" });
 
             var emit = helper.GetEmitHelper(method);
+            /*
             var streamLocal = emit.CreateLocal("class System.IO.Stream");
             var assemblyLocal = emit.CreateLocal("classSystem.Reflection.Assembly");
             var bufferLocal = emit.CreateLocal("class System.IO.MemoryStream");
@@ -205,6 +207,9 @@ namespace Techsola.EmbedDependencies
                HandlerEnd =
             });*/
 
+            emit.Ldnull();
+            emit.Ret();
+
             return method;
         }
 
@@ -224,21 +229,25 @@ namespace Techsola.EmbedDependencies
                 returnType: "class System.IO.Stream",
                 parameterTypes: new[] { "class System.Reflection.AssemblyName" });
 
-            var emit = helper.GetEmitHelper(method);
+            var emitter = new Emitter(method.Body, helper);
 
-            emit.Ldsfld(dictionaryField);
-            emit.Ldarg(0);
-            emit.Callvirt("instance string class System.Reflection.AssemblyName::get_Name()");
+            var resourceNameVariable = emitter.CreateLocal("string");
+            var successLabel = new Label();
 
-            var resourceNameVariable = emit.CreateLocal("string");
-            emit.Ldloca(resourceNameVariable);
-            emit.Callvirt("instance bool class System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)");
+            emitter.Emit(
+                Ldsfld(dictionaryField),
+                Ldarg(0),
+                Callvirt("instance string class System.Reflection.AssemblyName::get_Name()"),
+                Ldloca(resourceNameVariable),
+                Callvirt("instance bool class System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)"),
 
-            var successBranch = emit.IL.Create(OpCodes.Ldtoken, moduleType);
-
-            emit.Brtrue_S(successBranch);
-            emit.Ldnull();
-            emit.Ret();
+                successLabel,
+                Ldtoken(moduleType),
+                Call("class System.Type System.Type::GetTypeFromHandle(valuetype System.RuntimeTypeHandle)"),
+                Callvirt("instance class System.Reflection.Assembly System.Type::get_Assembly()"),
+                Ldloc(resourceNameVariable),
+                Callvirt("instance class System.IO.Stream System.Reflection.Assembly::GetManifestResourceStream(string)"),
+                Ret());
 
             return method;
         }

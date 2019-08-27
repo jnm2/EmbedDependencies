@@ -22,7 +22,7 @@ namespace Techsola.EmbedDependencies
 
         public VariableDefinition CreateLocal(string ilasmTypeReferenceSyntax)
         {
-            var local = new VariableDefinition(Metadata.GetTypeReference("string"));
+            var local = new VariableDefinition(Metadata.GetTypeReference(ilasmTypeReferenceSyntax));
             methodBody.Variables.Add(local);
             return local;
         }
