@@ -145,63 +145,72 @@ namespace Techsola.EmbedDependencies
                 returnType: "class System.Reflection.Assembly",
                 parameterTypes: new[] { "object", "class System.ResolveEventArgs" });
 
-            var emit = helper.GetEmitHelper(method);
-            /*
-            var streamLocal = emit.CreateLocal("class System.IO.Stream");
-            var assemblyLocal = emit.CreateLocal("classSystem.Reflection.Assembly");
-            var bufferLocal = emit.CreateLocal("class System.IO.MemoryStream");
+            var program = new ProgramBuilder(method.Body, helper);
 
-            emit.Ldarg(1);
-            emit.Callvirt("instance string System.ResolveEventArgs::get_Name()");
-            emit.Newobj("instance void System.Reflection.AssemblyName::.ctor(string)");
-            emit.Call(getResourceAssemblyStreamOrNullMethod);
-            emit.Stloc(streamLocal);
+            var streamLocal = program.CreateLocal("class System.IO.Stream");
+            var assemblyLocal = program.CreateLocal("class System.Reflection.Assembly");
+            var bufferLocal = program.CreateLocal("class System.IO.MemoryStream");
 
-            var loadReturnValue = emit.IL.Create(OpCodes.Ldloc, assemblyLocal);
-            var skipReturningNull = emit.IL.Create(OpCodes.Ldloc, streamLocal);
+            var skipReturningNullLabel = new Label();
+            var returnAssemblyLabel = new Label();
+            var skipInnerDispose = new Label();
+            var skipOuterDispose = new Label();
 
-            // try
-            emit.Ldloc(streamLocal);
-            emit.Brtrue_S(skipReturningNull);
+            program.Append(
+                Ldarg(1),
+                Callvirt("instance string System.ResolveEventArgs::get_Name()"),
+                Newobj("instance void System.Reflection.AssemblyName::.ctor(string)"),
+                Call(getResourceAssemblyStreamOrNullMethod),
+                Stloc(streamLocal),
 
-            emit.Ldnull();
-            emit.Stloc(assemblyLocal);
-            emit.Leave_S(loadReturnValue);
+                // try
+                Ldloc(streamLocal),
+                Brtrue_S(skipReturningNullLabel),
 
-            emit.IL.Append(skipReturningNull);
-            emit.Callvirt("instance int64 System.IO.Stream::get_Length()");
-            emit.Conv_Ovf_I4();
-            emit.Newobj("instance void System.IO.MemoryStream::.ctor(int32)");
-            emit.Stloc(bufferLocal);
+                Ldnull(),
+                Stloc(assemblyLocal),
+                Leave_S(returnAssemblyLabel),
 
-            // try
-            emit.Ldloc(streamLocal);
-            emit.Ldloc(bufferLocal);
-            emit.Callvirt("instance void System.IO.Stream::CopyTo(class System.IO.Stream)");
-            emit.Ldloc(bufferLocal);
-            emit.Callvirt("instance unsigned int8[] System.IO.MemoryStream::ToArray()");
-            emit.Call("class System.Reflection.Assembly System.Reflection.Assembly::Load(unsigned int8[])");
-            emit.Stloc(assemblyLocal);
-            emit.Leave_S(loadReturnValue);
+                skipReturningNullLabel,
+                Ldloc(streamLocal),
+                Callvirt("instance int64 System.IO.Stream::get_Length()"),
+                Conv_Ovf_I4(),
+                Newobj("instance void System.IO.MemoryStream::.ctor(int32)"),
+                Stloc(bufferLocal),
 
-            // finally
-            var endFinally = emit.IL.Create(OpCodes.Endfinally);
-            emit.Ldloc(bufferLocal);
-            emit.Brfalse_S(endFinally);
-            emit.Ldloc(bufferLocal);
-            emit.Callvirt("instance void System.IDisposable::Dispose()");
-            emit.IL.Append(endFinally);
+                // try
+                Ldloc(streamLocal),
+                Ldloc(bufferLocal),
+                Callvirt("instance void System.IO.Stream::CopyTo(class System.IO.Stream)"),
+                Ldloc(bufferLocal),
+                Callvirt("instance unsigned int8[] System.IO.MemoryStream::ToArray()"),
+                Call("class System.Reflection.Assembly System.Reflection.Assembly::Load(unsigned int8[])"),
+                Stloc(assemblyLocal),
+                Leave_S(returnAssemblyLabel),
 
-            // finally
-            endFinally = emit.IL.Create(OpCodes.Endfinally);
-            emit.Ldloc(streamLocal);
-            emit.Brfalse_S(endFinally);
-            emit.Ldloc(streamLocal);
-            emit.Callvirt("instance void System.IDisposable::Dispose()");
-            emit.IL.Append(endFinally);
+                // finally
+                Ldloc(bufferLocal),
+                Brfalse_S(skipInnerDispose),
 
-            emit.IL.Append(loadReturnValue);
-            emit.Ret();
+                Ldloc(bufferLocal),
+                Callvirt("instance void System.IDisposable::Dispose()"),
+
+                skipInnerDispose,
+                Endfinally(),
+
+                // finally
+                Ldloc(streamLocal),
+                Brfalse_S(skipOuterDispose),
+
+                Ldloc(streamLocal),
+                Callvirt("instance void System.IDisposable::Dispose()"),
+
+                skipOuterDispose,
+                Endfinally(),
+
+                returnAssemblyLabel,
+                Ldloc(assemblyLocal),
+                Ret());
 
             /*
             method.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally)
@@ -212,9 +221,7 @@ namespace Techsola.EmbedDependencies
                HandlerEnd =
             });*/
 
-            emit.Ldnull();
-            emit.Ret();
-
+            program.Emit();
             return method;
         }
 

@@ -25,7 +25,11 @@ namespace Techsola.EmbedDependencies.Emit
 
         public static IProgramElement Callvirt(MethodReference method) => new DirectInstruction(Instruction.Create(OpCodes.Callvirt, method));
 
+        public static IProgramElement Conv_Ovf_I4() => new DirectInstruction(Instruction.Create(OpCodes.Conv_Ovf_I4));
+
         public static IProgramElement Dup() => new DirectInstruction(Instruction.Create(OpCodes.Dup));
+
+        public static IProgramElement Endfinally() => new DirectInstruction(Instruction.Create(OpCodes.Endfinally));
 
         public static IProgramElement Ldarg(int index)
         {

@@ -24,11 +24,6 @@ namespace Techsola.EmbedDependencies
             typeProvider = new MonoCecilTypeProvider(module, GetScopeForAssemblyName, overrideImplicitScope);
         }
 
-        public EmitHelper GetEmitHelper(MethodDefinition methodDefinition)
-        {
-            return new EmitHelper(this, methodDefinition.Body);
-        }
-
         public TypeReference GetTypeReference(string ilasmSyntax)
         {
             return ILAsmParser.ParseType(ilasmSyntax, typeProvider);
