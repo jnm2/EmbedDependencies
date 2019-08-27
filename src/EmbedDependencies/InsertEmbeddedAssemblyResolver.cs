@@ -44,10 +44,21 @@ namespace Techsola.EmbedDependencies
             var getResourceAssemblyStreamOrNullMethod = CreateGetResourceAssemblyStreamOrNullMethod(dictionaryField, moduleType, helper);
             moduleType.Methods.Add(getResourceAssemblyStreamOrNullMethod);
 
-            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(getResourceAssemblyStreamOrNullMethod, helper);
+            var useAppDomain = helper.FrameworkName == ".NETFramework";
+
+            var assemblyResolveHandler = useAppDomain
+                ? CreateAppDomainAssemblyResolveHandler(getResourceAssemblyStreamOrNullMethod, helper)
+                : CreateAssemblyLoadContextAssemblyResolveHandler(getResourceAssemblyStreamOrNullMethod, helper);
+
             moduleType.Methods.Add(assemblyResolveHandler);
 
-            var moduleInitializer = CreateModuleInitializer(dictionaryField, embeddedResourceNamesByAssemblyName, assemblyResolveHandler, helper);
+            var moduleInitializer = CreateModuleInitializer(
+                dictionaryField,
+                embeddedResourceNamesByAssemblyName,
+                assemblyResolveHandler,
+                useAppDomain,
+                helper);
+
             moduleType.Methods.Add(moduleInitializer);
 
             assemblyDefinition.Write(stream);
@@ -57,6 +68,7 @@ namespace Techsola.EmbedDependencies
             FieldReference dictionaryField,
             IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName,
             MethodReference assemblyResolveHandler,
+            bool isAppDomainHandler,
             MetadataHelper helper)
         {
             // C#:
@@ -82,9 +94,8 @@ namespace Techsola.EmbedDependencies
             program.Append(
                 Call("class System.StringComparer System.StringComparer::get_OrdinalIgnoreCase()"),
 
-                Newobj(@"
-                    instance void class System.Collections.Generic.Dictionary`2<string, string>::.ctor(
-                        class System.Collections.Generic.IEqualityComparer`1<!0>)"));
+                Newobj(@"instance void class System.Collections.Generic.Dictionary`2<string, string>::.ctor(
+                    class System.Collections.Generic.IEqualityComparer`1<!0>)"));
 
             foreach (var entry in embeddedResourceNamesByAssemblyName)
             {
@@ -96,15 +107,39 @@ namespace Techsola.EmbedDependencies
             }
 
             program.Append(
-                Stsfld(dictionaryField),
+                Stsfld(dictionaryField));
 
-                // Add AssemblyResolve handler
-                Call("class System.AppDomain System.AppDomain::get_CurrentDomain()"),
-                Ldnull(),
-                Ldftn(assemblyResolveHandler),
-                Newobj("instance void System.ResolveEventHandler::.ctor(object, native int)"),
-                Callvirt("instance void System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)"),
+            if (isAppDomainHandler)
+            {
+                program.Append(
+                    Call("class System.AppDomain System.AppDomain::get_CurrentDomain()"),
+                    Ldnull(),
+                    Ldftn(assemblyResolveHandler),
+                    Newobj("instance void System.ResolveEventHandler::.ctor(object, native int)"),
+                    Callvirt("instance void System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)"));
+            }
+            else
+            {
+                program.Append(
+                    Call(@"class [System.Runtime.Loader]System.Runtime.Loader.AssemblyLoadContext
+                        class [System.Runtime.Loader]System.Runtime.Loader.AssemblyLoadContext::get_Default()"),
 
+                    Ldnull(),
+                    Ldftn(assemblyResolveHandler),
+
+                    Newobj(@"instance void class System.Func`3<
+                        class [System.Runtime.Loader]System.Runtime.Loader.AssemblyLoadContext,
+                        class System.Reflection.AssemblyName,
+                        class System.Reflection.Assembly>::.ctor(object, native int)"),
+
+                    Callvirt(@"instance void class [System.Runtime.Loader]System.Runtime.Loader.AssemblyLoadContext::add_Resolving(
+                        class System.Func`3<
+                            class [System.Runtime.Loader]System.Runtime.Loader.AssemblyLoadContext,
+                            class System.Reflection.AssemblyName,
+                            class System.Reflection.Assembly>)"));
+            }
+
+            program.Append(
                 Ret());
 
             program.Emit();
@@ -120,6 +155,72 @@ namespace Techsola.EmbedDependencies
                 "EmbeddedResourceNamesByAssemblyName",
                 FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly,
                 helper.GetTypeReference("class System.Collections.Generic.Dictionary`2<string, string>"));
+        }
+
+        private static MethodDefinition CreateAssemblyLoadContextAssemblyResolveHandler(MethodReference getResourceAssemblyStreamOrNullMethod, MetadataHelper helper)
+        {
+            // C#:
+            // private static Assembly Default_Resolving(AssemblyLoadContext context, AssemblyName name)
+            // {
+            //     using (var stream = GetResourceAssemblyStreamOrNull(name))
+            //     {
+            //         if (stream is null) return null;
+            //         return context.LoadFromStream(stream);
+            //     }
+            // }
+
+            var method = helper.DefineMethod(
+                "OnAssemblyResolve",
+                MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+                returnType: "class System.Reflection.Assembly",
+                parameterTypes: new[] { "object", "class System.ResolveEventArgs" });
+
+            var program = new ProgramBuilder(method.Body, helper);
+
+            var streamLocal = program.CreateLocal("class System.IO.Stream");
+            var assemblyLocal = program.CreateLocal("class System.Reflection.Assembly");
+
+            var skipReturningNullLabel = new Label();
+            var returnAssemblyLabel = new Label();
+            var skipDispose = new Label();
+
+            program.Append(
+                Ldarg(1),
+                Call(getResourceAssemblyStreamOrNullMethod),
+                Stloc(streamLocal),
+
+                Try(
+                    Ldloc(streamLocal),
+                    Brtrue_S(skipReturningNullLabel),
+
+                    Ldnull(),
+                    Stloc(assemblyLocal),
+                    Leave_S(returnAssemblyLabel),
+
+                    skipReturningNullLabel,
+                    Ldarg(0),
+                    Ldloc(streamLocal),
+                    Callvirt(@"instance class System.Reflection.Assembly
+                        class [System.Runtime.Loader]System.Runtime.Loader.AssemblyLoadContext::LoadFromStream(class System.IO.Stream)"),
+                    Stloc(assemblyLocal),
+                    Leave_S(returnAssemblyLabel))
+
+                .Finally(
+                    Ldloc(streamLocal),
+                    Brfalse_S(skipDispose),
+
+                    Ldloc(streamLocal),
+                    Callvirt("instance void System.IDisposable::Dispose()"),
+
+                    skipDispose,
+                    Endfinally()),
+
+                returnAssemblyLabel,
+                Ldloc(assemblyLocal),
+                Ret());
+
+            program.Emit();
+            return method;
         }
 
         private static MethodDefinition CreateAppDomainAssemblyResolveHandler(MethodReference getResourceAssemblyStreamOrNullMethod, MetadataHelper helper)

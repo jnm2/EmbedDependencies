@@ -29,8 +29,13 @@ namespace Techsola.EmbedDependencies
             }
 
             return new MetadataHelper(
+                frameworkName,
+                version,
                 module,
-                new Dictionary<string, IMetadataScope>(),
+                new Dictionary<string, IMetadataScope>
+                {
+                    ["System.Runtime.Loader"] = GetOrAddAssemblyReference(module, "System.Runtime.Loader")
+                },
                 baselineScope);
         }
 

@@ -12,12 +12,19 @@ namespace Techsola.EmbedDependencies
         private readonly IReadOnlyDictionary<string, IMetadataScope> scopesByAssemblyMoniker;
         private readonly IILAsmTypeSyntaxTypeProvider<TypeReference> typeProvider;
 
+        public string FrameworkName { get; }
+        public Version FrameworkVersion { get; }
+
         public MetadataHelper(
+            string frameworkName,
+            Version frameworkVersion,
             ModuleDefinition module,
             IReadOnlyDictionary<string, IMetadataScope> scopesByAssemblyMoniker,
             IMetadataScope overrideImplicitScope = null)
         {
             if (module is null) throw new ArgumentNullException(nameof(module));
+            FrameworkName = frameworkName;
+            FrameworkVersion = frameworkVersion;
             this.scopesByAssemblyMoniker = scopesByAssemblyMoniker ?? throw new ArgumentNullException(nameof(scopesByAssemblyMoniker));
 
             typeProvider = null;
