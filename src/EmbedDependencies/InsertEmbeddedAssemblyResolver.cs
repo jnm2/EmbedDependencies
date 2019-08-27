@@ -80,7 +80,7 @@ namespace Techsola.EmbedDependencies
 
             // Initialize dictionary field
             program.Append(
-                Call("class System.StringComparer class System.StringComparer::get_OrdinalIgnoreCase()"),
+                Call("class System.StringComparer System.StringComparer::get_OrdinalIgnoreCase()"),
 
                 Newobj(@"
                     instance void class System.Collections.Generic.Dictionary`2<string, string>::.ctor(
@@ -99,11 +99,11 @@ namespace Techsola.EmbedDependencies
                 Stsfld(dictionaryField),
 
                 // Add AssemblyResolve handler
-                Call("class System.AppDomain class System.AppDomain::get_CurrentDomain()"),
+                Call("class System.AppDomain System.AppDomain::get_CurrentDomain()"),
                 Ldnull(),
                 Ldftn(assemblyResolveHandler),
-                Newobj("instance void class System.ResolveEventHandler::.ctor(object, native int)"),
-                Callvirt("instance void class System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)"),
+                Newobj("instance void System.ResolveEventHandler::.ctor(object, native int)"),
+                Callvirt("instance void System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)"),
 
                 Ret());
 
@@ -240,7 +240,7 @@ namespace Techsola.EmbedDependencies
             programBuilder.Append(
                 Ldsfld(dictionaryField),
                 Ldarg(0),
-                Callvirt("instance string class System.Reflection.AssemblyName::get_Name()"),
+                Callvirt("instance string System.Reflection.AssemblyName::get_Name()"),
                 Ldloca(resourceNameVariable),
                 Callvirt("instance bool class System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)"),
                 Brtrue_S(successLabel),
