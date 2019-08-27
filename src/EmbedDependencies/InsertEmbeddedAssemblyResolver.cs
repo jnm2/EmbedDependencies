@@ -245,6 +245,10 @@ namespace Techsola.EmbedDependencies
                 Callvirt("instance string class System.Reflection.AssemblyName::get_Name()"),
                 Ldloca(resourceNameVariable),
                 Callvirt("instance bool class System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)"),
+                Brtrue_S(successLabel),
+
+                Ldnull(),
+                Ret(),
 
                 successLabel,
                 Ldtoken(moduleType),
