@@ -76,33 +76,38 @@ namespace Techsola.EmbedDependencies
                 MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
                 returnType: "void");
 
-            var emit = helper.GetEmitHelper(moduleInitializer);
+            var program = new ProgramBuilder(moduleInitializer.Body, helper);
 
             // Initialize dictionary field
-            emit.Call("class System.StringComparer class System.StringComparer::get_OrdinalIgnoreCase()");
-            emit.Newobj(@"
-                instance void class System.Collections.Generic.Dictionary`2<string, string>::.ctor(
-                    class System.Collections.Generic.IEqualityComparer`1<!0>)");
+            program.Append(
+                Call("class System.StringComparer class System.StringComparer::get_OrdinalIgnoreCase()"),
+
+                Newobj(@"
+                    instance void class System.Collections.Generic.Dictionary`2<string, string>::.ctor(
+                        class System.Collections.Generic.IEqualityComparer`1<!0>)"));
 
             foreach (var entry in embeddedResourceNamesByAssemblyName)
             {
-                emit.Dup();
-                emit.Ldstr(entry.Key);
-                emit.Ldstr(entry.Value);
-                emit.Callvirt("instance void class System.Collections.Generic.Dictionary`2<string, string>::set_Item(!0, !1)");
+                program.Append(
+                    Dup(),
+                    Ldstr(entry.Key),
+                    Ldstr(entry.Value),
+                    Callvirt("instance void class System.Collections.Generic.Dictionary`2<string, string>::set_Item(!0, !1)"));
             }
 
-            emit.Stsfld(dictionaryField);
+            program.Append(
+                Stsfld(dictionaryField),
 
-            // Add AssemblyResolve handler
-            emit.Call("class System.AppDomain class System.AppDomain::get_CurrentDomain()");
-            emit.Ldnull();
-            emit.Ldftn(assemblyResolveHandler);
-            emit.Newobj("instance void class System.ResolveEventHandler::.ctor(object, native int)");
-            emit.Callvirt("instance void class System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)");
+                // Add AssemblyResolve handler
+                Call("class System.AppDomain class System.AppDomain::get_CurrentDomain()"),
+                Ldnull(),
+                Ldftn(assemblyResolveHandler),
+                Newobj("instance void class System.ResolveEventHandler::.ctor(object, native int)"),
+                Callvirt("instance void class System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)"),
 
-            emit.Ret();
+                Ret());
 
+            program.Emit();
             return moduleInitializer;
         }
 
@@ -229,12 +234,12 @@ namespace Techsola.EmbedDependencies
                 returnType: "class System.IO.Stream",
                 parameterTypes: new[] { "class System.Reflection.AssemblyName" });
 
-            var emitter = new Emitter(method.Body, helper);
+            var programBuilder = new ProgramBuilder(method.Body, helper);
 
-            var resourceNameVariable = emitter.CreateLocal("string");
+            var resourceNameVariable = programBuilder.CreateLocal("string");
             var successLabel = new Label();
 
-            emitter.Emit(
+            programBuilder.Append(
                 Ldsfld(dictionaryField),
                 Ldarg(0),
                 Callvirt("instance string class System.Reflection.AssemblyName::get_Name()"),
@@ -249,6 +254,7 @@ namespace Techsola.EmbedDependencies
                 Callvirt("instance class System.IO.Stream System.Reflection.Assembly::GetManifestResourceStream(string)"),
                 Ret());
 
+            programBuilder.Emit();
             return method;
         }
     }

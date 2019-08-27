@@ -19,7 +19,13 @@ namespace Techsola.EmbedDependencies.Emit
 
         public static IProgramElement Call(string methodReferenceSyntax) => new SyntaxBasedCall(OpCodes.Call, methodReferenceSyntax);
 
+        public static IProgramElement Call(MethodReference method) => new DirectInstruction(Instruction.Create(OpCodes.Call, method));
+
         public static IProgramElement Callvirt(string methodReferenceSyntax) => new SyntaxBasedCall(OpCodes.Callvirt, methodReferenceSyntax);
+
+        public static IProgramElement Callvirt(MethodReference method) => new DirectInstruction(Instruction.Create(OpCodes.Callvirt, method));
+
+        public static IProgramElement Dup() => new DirectInstruction(Instruction.Create(OpCodes.Dup));
 
         public static IProgramElement Ldarg(int index)
         {
@@ -53,6 +59,10 @@ namespace Techsola.EmbedDependencies.Emit
 
         public static IProgramElement Ldflda(FieldReference field) => new DirectInstruction(Instruction.Create(OpCodes.Ldflda, field));
 
+        public static IProgramElement Ldftn(string methodReferenceSyntax) => new SyntaxBasedCall(OpCodes.Ldftn, methodReferenceSyntax);
+
+        public static IProgramElement Ldftn(MethodReference method) => new DirectInstruction(Instruction.Create(OpCodes.Ldftn, method));
+
         public static IProgramElement Ldloc(VariableDefinition variable)
         {
             switch (variable.Index)
@@ -81,11 +91,13 @@ namespace Techsola.EmbedDependencies.Emit
             return new DirectInstruction(Instruction.Create(OpCodes.Ldloca, variable));
         }
 
+        public static IProgramElement Ldnull() => new DirectInstruction(Instruction.Create(OpCodes.Ldnull));
+
         public static IProgramElement Ldsfld(FieldReference field) => new DirectInstruction(Instruction.Create(OpCodes.Ldsfld, field));
 
         public static IProgramElement Ldsflda(FieldReference field) => new DirectInstruction(Instruction.Create(OpCodes.Ldsflda, field));
 
-        public static IProgramElement Ldnull() => new DirectInstruction(Instruction.Create(OpCodes.Ldnull));
+        public static IProgramElement Ldstr(string value) => new DirectInstruction(Instruction.Create(OpCodes.Ldstr, value));
 
         public static IProgramElement Ldtoken(TypeReference type) => new DirectInstruction(Instruction.Create(OpCodes.Ldtoken, type));
 
@@ -94,6 +106,8 @@ namespace Techsola.EmbedDependencies.Emit
         public static IProgramElement Leave_S(Label target) => new LabelBranch(OpCodes.Leave_S, target);
 
         public static IProgramElement Newobj(string methodReferenceSyntax) => new SyntaxBasedCall(OpCodes.Newobj, methodReferenceSyntax);
+
+        public static IProgramElement Newobj(MethodReference method) => new DirectInstruction(Instruction.Create(OpCodes.Newobj, method));
 
         public static IProgramElement Ret() => new DirectInstruction(Instruction.Create(OpCodes.Ret));
 

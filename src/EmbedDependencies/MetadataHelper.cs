@@ -29,11 +29,6 @@ namespace Techsola.EmbedDependencies
             return new EmitHelper(this, methodDefinition.Body);
         }
 
-        public Emitter GetEmitter(MethodDefinition methodDefinition)
-        {
-            return new Emitter(methodDefinition.Body, this);
-        }
-
         public TypeReference GetTypeReference(string ilasmSyntax)
         {
             return ILAsmParser.ParseType(ilasmSyntax, typeProvider);

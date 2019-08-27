@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil.Cil;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Techsola.EmbedDependencies.Emit
 {
@@ -15,24 +16,23 @@ namespace Techsola.EmbedDependencies.Emit
             this.syntaxProvider = syntaxProvider;
         }
 
-        public VariableDefinition CreateLocal(string typeReferenceSyntax)
-        {
-            var local = new VariableDefinition(syntaxProvider.GetTypeReference(typeReferenceSyntax));
-            body.Variables.Add(local);
-            return local;
-        }
-
-        public void Emit(params IProgramElement[] programElements)
+        public void Emit(IEnumerable<IProgramElement> programElements)
         {
             if (programElements is null) throw new ArgumentNullException(nameof(programElements));
 
-            var lowered = ResolveReferenceSyntax(programElements);
+            var defensiveCopy = programElements.ToArray();
+            var lowered = ResolveReferenceSyntax(defensiveCopy);
             var instructions = LowerLabelBranching(lowered);
 
             var il = body.GetILProcessor();
 
             foreach (var instruction in instructions)
                 il.Append(instruction);
+        }
+
+        public void Emit(params IProgramElement[] programElements)
+        {
+            Emit((IEnumerable<IProgramElement>)programElements);
         }
 
         private static readonly Instruction DummyBranchTarget = Instruction.Create(OpCodes.Nop);
