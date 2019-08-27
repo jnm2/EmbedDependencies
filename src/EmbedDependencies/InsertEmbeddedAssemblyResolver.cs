@@ -1,9 +1,10 @@
 ﻿using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
 using System.Collections.Generic;
 using System.IO;
+using Techsola.EmbedDependencies.Emit;
+using static Techsola.EmbedDependencies.Emit.Elements;
 
 namespace Techsola.EmbedDependencies
 {
@@ -43,7 +44,7 @@ namespace Techsola.EmbedDependencies
             var getResourceAssemblyStreamOrNullMethod = CreateGetResourceAssemblyStreamOrNullMethod(dictionaryField, moduleType, helper);
             moduleType.Methods.Add(getResourceAssemblyStreamOrNullMethod);
 
-            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(helper);
+            var assemblyResolveHandler = CreateAppDomainAssemblyResolveHandler(getResourceAssemblyStreamOrNullMethod, helper);
             moduleType.Methods.Add(assemblyResolveHandler);
 
             var moduleInitializer = CreateModuleInitializer(dictionaryField, embeddedResourceNamesByAssemblyName, assemblyResolveHandler, helper);
@@ -75,33 +76,38 @@ namespace Techsola.EmbedDependencies
                 MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
                 returnType: "void");
 
-            var emit = helper.GetEmitHelper(moduleInitializer);
+            var program = new ProgramBuilder(moduleInitializer.Body, helper);
 
             // Initialize dictionary field
-            emit.Call("class System.StringComparer class System.StringComparer::get_OrdinalIgnoreCase()");
-            emit.Newobj(@"
-                instance void class System.Collections.Generic.Dictionary`2<string, string>::.ctor(
-                    class System.Collections.Generic.IEqualityComparer`1<!0>)");
+            program.Append(
+                Call("class System.StringComparer class System.StringComparer::get_OrdinalIgnoreCase()"),
+
+                Newobj(@"
+                    instance void class System.Collections.Generic.Dictionary`2<string, string>::.ctor(
+                        class System.Collections.Generic.IEqualityComparer`1<!0>)"));
 
             foreach (var entry in embeddedResourceNamesByAssemblyName)
             {
-                emit.Dup();
-                emit.Ldstr(entry.Key);
-                emit.Ldstr(entry.Value);
-                emit.Callvirt("instance void class System.Collections.Generic.Dictionary`2<string, string>::set_Item(!0, !1)");
+                program.Append(
+                    Dup(),
+                    Ldstr(entry.Key),
+                    Ldstr(entry.Value),
+                    Callvirt("instance void class System.Collections.Generic.Dictionary`2<string, string>::set_Item(!0, !1)"));
             }
 
-            emit.Stsfld(dictionaryField);
+            program.Append(
+                Stsfld(dictionaryField),
 
-            // Add AssemblyResolve handler
-            emit.Call("class System.AppDomain class System.AppDomain::get_CurrentDomain()");
-            emit.Ldnull();
-            emit.Ldftn(assemblyResolveHandler);
-            emit.Newobj("instance void class System.ResolveEventHandler::.ctor(object, native int)");
-            emit.Callvirt("instance void class System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)");
+                // Add AssemblyResolve handler
+                Call("class System.AppDomain class System.AppDomain::get_CurrentDomain()"),
+                Ldnull(),
+                Ldftn(assemblyResolveHandler),
+                Newobj("instance void class System.ResolveEventHandler::.ctor(object, native int)"),
+                Callvirt("instance void class System.AppDomain::add_AssemblyResolve(class System.ResolveEventHandler)"),
 
-            emit.Ret();
+                Ret());
 
+            program.Emit();
             return moduleInitializer;
         }
 
@@ -116,7 +122,7 @@ namespace Techsola.EmbedDependencies
                 helper.GetTypeReference("class System.Collections.Generic.Dictionary`2<string, string>"));
         }
 
-        private static MethodDefinition CreateAppDomainAssemblyResolveHandler(MetadataHelper helper)
+        private static MethodDefinition CreateAppDomainAssemblyResolveHandler(MethodReference getResourceAssemblyStreamOrNullMethod, MetadataHelper helper)
         {
             // C#:
             // private static Assembly OnAssemblyResolve(object sender, ResolveEventArgs e)
@@ -133,20 +139,81 @@ namespace Techsola.EmbedDependencies
             //     }
             // }
 
-            var handler = helper.DefineMethod(
+            var method = helper.DefineMethod(
                 "OnAssemblyResolve",
                 MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
                 returnType: "class System.Reflection.Assembly",
                 parameterTypes: new[] { "object", "class System.ResolveEventArgs" });
 
-            var emit = helper.GetEmitHelper(handler);
+            var program = new ProgramBuilder(method.Body, helper);
 
-            // TODO
+            var streamLocal = program.CreateLocal("class System.IO.Stream");
+            var assemblyLocal = program.CreateLocal("class System.Reflection.Assembly");
+            var bufferLocal = program.CreateLocal("class System.IO.MemoryStream");
 
-            emit.Ldnull();
-            emit.Ret();
+            var skipReturningNullLabel = new Label();
+            var returnAssemblyLabel = new Label();
+            var skipInnerDispose = new Label();
+            var skipOuterDispose = new Label();
 
-            return handler;
+            program.Append(
+                Ldarg(1),
+                Callvirt("instance string System.ResolveEventArgs::get_Name()"),
+                Newobj("instance void System.Reflection.AssemblyName::.ctor(string)"),
+                Call(getResourceAssemblyStreamOrNullMethod),
+                Stloc(streamLocal),
+
+                Try(
+                    Ldloc(streamLocal),
+                    Brtrue_S(skipReturningNullLabel),
+
+                    Ldnull(),
+                    Stloc(assemblyLocal),
+                    Leave_S(returnAssemblyLabel),
+
+                    skipReturningNullLabel,
+                    Ldloc(streamLocal),
+                    Callvirt("instance int64 System.IO.Stream::get_Length()"),
+                    Conv_Ovf_I4(),
+                    Newobj("instance void System.IO.MemoryStream::.ctor(int32)"),
+                    Stloc(bufferLocal),
+
+                    Try(
+                        Ldloc(streamLocal),
+                        Ldloc(bufferLocal),
+                        Callvirt("instance void System.IO.Stream::CopyTo(class System.IO.Stream)"),
+                        Ldloc(bufferLocal),
+                        Callvirt("instance unsigned int8[] System.IO.MemoryStream::ToArray()"),
+                        Call("class System.Reflection.Assembly System.Reflection.Assembly::Load(unsigned int8[])"),
+                        Stloc(assemblyLocal),
+                        Leave_S(returnAssemblyLabel))
+
+                    .Finally(
+                        Ldloc(bufferLocal),
+                        Brfalse_S(skipInnerDispose),
+
+                        Ldloc(bufferLocal),
+                        Callvirt("instance void System.IDisposable::Dispose()"),
+
+                        skipInnerDispose,
+                        Endfinally()))
+
+                .Finally(
+                    Ldloc(streamLocal),
+                    Brfalse_S(skipOuterDispose),
+
+                    Ldloc(streamLocal),
+                    Callvirt("instance void System.IDisposable::Dispose()"),
+
+                    skipOuterDispose,
+                    Endfinally()),
+
+                returnAssemblyLabel,
+                Ldloc(assemblyLocal),
+                Ret());
+
+            program.Emit();
+            return method;
         }
 
         private static MethodDefinition CreateGetResourceAssemblyStreamOrNullMethod(FieldReference dictionaryField, TypeReference moduleType, MetadataHelper helper)
@@ -165,30 +232,31 @@ namespace Techsola.EmbedDependencies
                 returnType: "class System.IO.Stream",
                 parameterTypes: new[] { "class System.Reflection.AssemblyName" });
 
-            var emit = helper.GetEmitHelper(method);
+            var programBuilder = new ProgramBuilder(method.Body, helper);
 
-            emit.Ldsfld(dictionaryField);
-            emit.Ldarg(0);
-            emit.Callvirt("instance string class System.Reflection.AssemblyName::get_Name()");
+            var resourceNameVariable = programBuilder.CreateLocal("string");
+            var successLabel = new Label();
 
-            var resourceNameVariable = emit.CreateLocal("string");
-            emit.Ldloca(resourceNameVariable);
-            emit.Callvirt("instance bool class System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)");
+            programBuilder.Append(
+                Ldsfld(dictionaryField),
+                Ldarg(0),
+                Callvirt("instance string class System.Reflection.AssemblyName::get_Name()"),
+                Ldloca(resourceNameVariable),
+                Callvirt("instance bool class System.Collections.Generic.Dictionary`2<string, string>::TryGetValue(!0, !1&)"),
+                Brtrue_S(successLabel),
 
-            var successBranch = emit.IL.Create(OpCodes.Ldtoken, moduleType);
+                Ldnull(),
+                Ret(),
 
-            emit.Brtrue_S(successBranch);
-            emit.Ldnull();
-            emit.Ret();
+                successLabel,
+                Ldtoken(moduleType),
+                Call("class System.Type System.Type::GetTypeFromHandle(valuetype System.RuntimeTypeHandle)"),
+                Callvirt("instance class System.Reflection.Assembly System.Type::get_Assembly()"),
+                Ldloc(resourceNameVariable),
+                Callvirt("instance class System.IO.Stream System.Reflection.Assembly::GetManifestResourceStream(string)"),
+                Ret());
 
-            emit.IL.Append(successBranch);
-
-            emit.Call("class System.Type System.Type::GetTypeFromHandle(valuetype System.RuntimeTypeHandle)");
-            emit.Callvirt("instance class System.Reflection.Assembly System.Type::get_Assembly()");
-            emit.Ldloc(resourceNameVariable);
-            emit.Callvirt("instance class System.IO.Stream System.Reflection.Assembly::GetManifestResourceStream(string)");
-            emit.Ret();
-
+            programBuilder.Emit();
             return method;
         }
     }
