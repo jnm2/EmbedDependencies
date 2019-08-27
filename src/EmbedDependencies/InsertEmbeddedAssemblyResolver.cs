@@ -163,63 +163,54 @@ namespace Techsola.EmbedDependencies
                 Call(getResourceAssemblyStreamOrNullMethod),
                 Stloc(streamLocal),
 
-                // try
-                Ldloc(streamLocal),
-                Brtrue_S(skipReturningNullLabel),
+                Try(
+                    Ldloc(streamLocal),
+                    Brtrue_S(skipReturningNullLabel),
 
-                Ldnull(),
-                Stloc(assemblyLocal),
-                Leave_S(returnAssemblyLabel),
+                    Ldnull(),
+                    Stloc(assemblyLocal),
+                    Leave_S(returnAssemblyLabel),
 
-                skipReturningNullLabel,
-                Ldloc(streamLocal),
-                Callvirt("instance int64 System.IO.Stream::get_Length()"),
-                Conv_Ovf_I4(),
-                Newobj("instance void System.IO.MemoryStream::.ctor(int32)"),
-                Stloc(bufferLocal),
+                    skipReturningNullLabel,
+                    Ldloc(streamLocal),
+                    Callvirt("instance int64 System.IO.Stream::get_Length()"),
+                    Conv_Ovf_I4(),
+                    Newobj("instance void System.IO.MemoryStream::.ctor(int32)"),
+                    Stloc(bufferLocal),
 
-                // try
-                Ldloc(streamLocal),
-                Ldloc(bufferLocal),
-                Callvirt("instance void System.IO.Stream::CopyTo(class System.IO.Stream)"),
-                Ldloc(bufferLocal),
-                Callvirt("instance unsigned int8[] System.IO.MemoryStream::ToArray()"),
-                Call("class System.Reflection.Assembly System.Reflection.Assembly::Load(unsigned int8[])"),
-                Stloc(assemblyLocal),
-                Leave_S(returnAssemblyLabel),
+                    Try(
+                        Ldloc(streamLocal),
+                        Ldloc(bufferLocal),
+                        Callvirt("instance void System.IO.Stream::CopyTo(class System.IO.Stream)"),
+                        Ldloc(bufferLocal),
+                        Callvirt("instance unsigned int8[] System.IO.MemoryStream::ToArray()"),
+                        Call("class System.Reflection.Assembly System.Reflection.Assembly::Load(unsigned int8[])"),
+                        Stloc(assemblyLocal),
+                        Leave_S(returnAssemblyLabel))
 
-                // finally
-                Ldloc(bufferLocal),
-                Brfalse_S(skipInnerDispose),
+                    .Finally(
+                        Ldloc(bufferLocal),
+                        Brfalse_S(skipInnerDispose),
 
-                Ldloc(bufferLocal),
-                Callvirt("instance void System.IDisposable::Dispose()"),
+                        Ldloc(bufferLocal),
+                        Callvirt("instance void System.IDisposable::Dispose()"),
 
-                skipInnerDispose,
-                Endfinally(),
+                        skipInnerDispose,
+                        Endfinally()))
 
-                // finally
-                Ldloc(streamLocal),
-                Brfalse_S(skipOuterDispose),
+                .Finally(
+                    Ldloc(streamLocal),
+                    Brfalse_S(skipOuterDispose),
 
-                Ldloc(streamLocal),
-                Callvirt("instance void System.IDisposable::Dispose()"),
+                    Ldloc(streamLocal),
+                    Callvirt("instance void System.IDisposable::Dispose()"),
 
-                skipOuterDispose,
-                Endfinally(),
+                    skipOuterDispose,
+                    Endfinally()),
 
                 returnAssemblyLabel,
                 Ldloc(assemblyLocal),
                 Ret());
-
-            /*
-            method.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally)
-            {
-               TryStart = ,
-               TryEnd = ,
-               HandlerStart = ,
-               HandlerEnd =
-            });*/
 
             program.Emit();
             return method;

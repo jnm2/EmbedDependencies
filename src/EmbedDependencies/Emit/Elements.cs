@@ -134,5 +134,7 @@ namespace Techsola.EmbedDependencies.Emit
         }
 
         public static IProgramElement Stsfld(FieldReference field) => new DirectInstruction(Instruction.Create(OpCodes.Stsfld, field));
+
+        public static TryBlock Try(params IProgramElement[] tryContents) => new TryBlock(tryContents);
     }
 }

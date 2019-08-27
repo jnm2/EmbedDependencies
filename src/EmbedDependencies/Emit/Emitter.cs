@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Techsola.EmbedDependencies.Emit
 {
-    public readonly struct Emitter
+    public readonly partial struct Emitter
     {
         private readonly MethodBody body;
         private readonly ISyntaxProvider syntaxProvider;
@@ -20,14 +20,23 @@ namespace Techsola.EmbedDependencies.Emit
         {
             if (programElements is null) throw new ArgumentNullException(nameof(programElements));
 
-            var defensiveCopy = programElements.ToArray();
-            var lowered = ResolveReferenceSyntax(defensiveCopy);
-            var instructions = LowerLabelBranching(lowered);
+            var exceptionHandlers = new List<ExceptionHandlerSpec>();
+
+            var lowered = (IReadOnlyList<IProgramElement>)programElements.ToArray();
+
+            lowered = LowerExceptionHandlers(lowered, exceptionHandlers.Add);
+            lowered = ResolveReferenceSyntax(lowered);
+            var instructions = LowerLabelBranching(lowered, out var targetsByLabel);
 
             var il = body.GetILProcessor();
 
             foreach (var instruction in instructions)
                 il.Append(instruction);
+
+            foreach (var handler in exceptionHandlers)
+            {
+                handler.Generate(body, label => targetsByLabel[label]);
+            }
         }
 
         public void Emit(params IProgramElement[] programElements)
@@ -37,7 +46,9 @@ namespace Techsola.EmbedDependencies.Emit
 
         private static readonly Instruction DummyBranchTarget = Instruction.Create(OpCodes.Nop);
 
-        private static IReadOnlyList<Instruction> LowerLabelBranching(IReadOnlyList<IProgramElement> elements)
+        private static IReadOnlyList<Instruction> LowerLabelBranching(
+            IReadOnlyList<IProgramElement> elements,
+            out IReadOnlyDictionary<Label, Instruction> targetsByLabel)
         {
             var lowered = new List<Instruction>();
 
@@ -96,6 +107,7 @@ namespace Techsola.EmbedDependencies.Emit
                     throw new InvalidOperationException("The label of a branch instruction was not added to the program.");
             }
 
+            targetsByLabel = targetInstructionsByLabel;
             return lowered;
         }
 
@@ -110,6 +122,45 @@ namespace Techsola.EmbedDependencies.Emit
                         call.OpCode,
                         syntaxProvider.GetMethodReference(call.MethodReferenceSyntax)))
                     : element);
+            }
+
+            return lowered;
+        }
+
+        private IReadOnlyList<IProgramElement> LowerExceptionHandlers(
+            IReadOnlyList<IProgramElement> elements,
+            Action<ExceptionHandlerSpec> addExceptionHandler)
+        {
+            var lowered = new List<IProgramElement>();
+
+            foreach (var element in elements)
+            {
+                if (element is TryFinallyBlock tryFinally)
+                {
+                    var tryStartLabel = new Label();
+                    lowered.Add(tryStartLabel);
+
+                    lowered.AddRange(LowerExceptionHandlers(tryFinally.TryContents, addExceptionHandler));
+
+                    var finallyStartLabel = new Label();
+                    lowered.Add(finallyStartLabel);
+
+                    lowered.AddRange(LowerExceptionHandlers(tryFinally.FinallyContents, addExceptionHandler));
+
+                    var finallyEndLabel = new Label();
+                    lowered.Add(finallyEndLabel);
+
+                    addExceptionHandler.Invoke(new ExceptionHandlerSpec(
+                        new ExceptionHandler(ExceptionHandlerType.Finally),
+                        tryStartLabel,
+                        tryEnd: finallyStartLabel,
+                        finallyStartLabel,
+                        finallyEndLabel));
+                }
+                else
+                {
+                    lowered.Add(element);
+                }
             }
 
             return lowered;
