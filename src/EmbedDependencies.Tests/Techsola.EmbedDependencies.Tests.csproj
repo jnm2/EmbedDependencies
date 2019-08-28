@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFrameworks>net46;netcoreapp2.1</TargetFrameworks>
-    <RootNamespace>Techsola.EmbedDependencies.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EmbedDependencies\EmbedDependencies.csproj" />
+    <ProjectReference Include="..\EmbedDependencies\Techsola.EmbedDependencies.csproj" />
   </ItemGroup>
 
 </Project>

@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29123.89
 MinimumVisualStudioVersion = 15.0.26124.0
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmbedDependencies", "src\EmbedDependencies\EmbedDependencies.csproj", "{B4C1C12F-730D-4E00-9D64-92FC2F29B02D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Techsola.EmbedDependencies", "src\EmbedDependencies\Techsola.EmbedDependencies.csproj", "{B4C1C12F-730D-4E00-9D64-92FC2F29B02D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmbedDependencies.Tests", "src\EmbedDependencies.Tests\EmbedDependencies.Tests.csproj", "{A90A8F0B-DEA8-4564-9645-34B56658E493}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Techsola.EmbedDependencies.Tests", "src\EmbedDependencies.Tests\Techsola.EmbedDependencies.Tests.csproj", "{A90A8F0B-DEA8-4564-9645-34B56658E493}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
