@@ -1,5 +1,6 @@
 ﻿using NUnit.Framework;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -17,7 +18,10 @@ namespace Techsola.EmbedDependencies.Tests
 
             stream.Position = 0;
 
-            InsertEmbeddedAssemblyResolver.Execute(stream);
+            InsertEmbeddedAssemblyResolver.Execute(stream, new Dictionary<string, string>
+            {
+                ["Foo"] = @"Assemblies\Foo.dll"
+            });
 
             stream.Position = 0;
 

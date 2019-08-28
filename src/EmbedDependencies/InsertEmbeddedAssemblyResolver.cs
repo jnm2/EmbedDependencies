@@ -1,6 +1,7 @@
 ﻿using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Mono.Cecil;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using Techsola.EmbedDependencies.Emit;
@@ -15,23 +16,47 @@ namespace Techsola.EmbedDependencies
         [Required]
         public ITaskItem TargetAssembly { get; set; }
 
+        [Required]
+        public ITaskItem[] DependenciesToBecomeEmbeddedResources { get; set; }
+
+        private IReadOnlyDictionary<string, string> GetEmbeddedResourceNamesByAssemblyName()
+        {
+            var dictionary = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in DependenciesToBecomeEmbeddedResources)
+            {
+                var fusionName = item.GetMetadata("FusionName");
+                if (string.IsNullOrWhiteSpace(fusionName))
+                    throw new Exception("No FusionName");
+
+                var simpleName = new System.Reflection.AssemblyName(fusionName).Name;
+
+                if (dictionary.ContainsKey(simpleName))
+                    throw new Exception($"Two assemblies have the name '{simpleName}'.");
+
+                var logicalName = item.GetMetadata("LogicalName");
+                if (string.IsNullOrWhiteSpace(fusionName))
+                    throw new Exception("No LogicalName");
+
+                dictionary.Add(simpleName, logicalName);
+            }
+
+            return dictionary;
+        }
+
         public override bool Execute()
         {
+            var embeddedResourceNamesByAssemblyName = GetEmbeddedResourceNamesByAssemblyName();
+
             using var stream = new FileStream(TargetAssembly.ItemSpec, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
 
-            Execute(stream);
+            Execute(stream, embeddedResourceNamesByAssemblyName);
             return true;
         }
 
-        public static void Execute(Stream stream)
+        public static void Execute(Stream stream, IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName)
         {
             var assemblyDefinition = AssemblyDefinition.ReadAssembly(stream, new ReaderParameters { ReadSymbols = false });
-
-            var embeddedResourceNamesByAssemblyName = new Dictionary<string, string>
-            {
-                ["TestAssembly"] = @"Assemblies\TestAssembly.dll",
-                ["Foo"] = @"Assemblies\Foo.dll"
-            };
 
             var module = assemblyDefinition.MainModule;
             var helper = TargetMetadataSetup.InitializeMetadataHelper(module);

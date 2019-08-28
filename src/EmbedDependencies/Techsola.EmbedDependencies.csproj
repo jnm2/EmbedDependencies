@@ -4,12 +4,21 @@
     <TargetFrameworks>net46;netcoreapp2.1</TargetFrameworks>
     <LangVersion>8</LangVersion>
     <Features>strict</Features>
+
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Framework" Version="15.9.20" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" Version="15.9.20" />
     <PackageReference Include="Mono.Cecil" Version="0.10.4" />
+
+    <PackageReference Update="@(PackageReference)" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="build\**\*" Pack="true" PackagePath="build" />
   </ItemGroup>
 
 </Project>

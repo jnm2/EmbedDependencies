@@ -1,0 +1,33 @@
+﻿<Project TreatAsLocalProperty="TaskFolder;TaskAssembly">
+
+  <PropertyGroup>
+    <TaskFolder Condition=" '$(MSBuildRuntimeType)' == 'Core' ">netcoreapp2.1</TaskFolder>
+    <TaskFolder Condition=" '$(MSBuildRuntimeType)' != 'Core' ">net46</TaskFolder>
+    <TaskAssembly>$(MSBuildThisFileDirectory)..\tasks\$(TaskFolder)\Techsola.EmbedDependencies.dll</TaskAssembly>
+  </PropertyGroup>
+
+  <UsingTask TaskName="Techsola.EmbedDependencies.InsertEmbeddedAssemblyResolver" AssemblyFile="$(TaskAssembly)" />
+
+  <Target Name="Techsola_EmbedDependencies_AddDependenciesAsEmbeddedResources" AfterTargets="ResolveAssemblyReferences" BeforeTargets="PrepareResources">
+    <PropertyGroup>
+      <EmbedDependenciesResourcePathPrefix>Assemblies\</EmbedDependenciesResourcePathPrefix>
+    </PropertyGroup>
+    <ItemGroup>
+      <_DependenciesToBecomeEmbeddedResources 
+        Include="@(ReferencePath)"
+        KeepMetadata="FusionName"
+        LogicalName="$(EmbedDependenciesResourcePathPrefix)%(Filename)%(Extension)" 
+        Condition=" '@(ReferenceCopyLocalPaths)' != '' " />
+      
+      <EmbeddedResource Include="@(_DependenciesToBecomeEmbeddedResources)" />
+      <ReferenceCopyLocalPaths Remove="@(_DependenciesToBecomeEmbeddedResources)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="Techsola_EmbedDependencies_InsertEmbeddedAssemblyResolver" AfterTargets="CoreCompile">
+    <Techsola.EmbedDependencies.InsertEmbeddedAssemblyResolver
+      TargetAssembly="@(IntermediateAssembly)"
+      DependenciesToBecomeEmbeddedResources="@(_DependenciesToBecomeEmbeddedResources)" />
+  </Target>
+
+</Project>
