@@ -5,14 +5,24 @@
       <EmbedDependenciesResourcePathPrefix>Assemblies\</EmbedDependenciesResourcePathPrefix>
     </PropertyGroup>
     <ItemGroup>
-      <_DependenciesToBecomeEmbeddedResources
-        Include="@(ReferencePath)"
-        KeepMetadata="FusionName"
-        LogicalName="$(EmbedDependenciesResourcePathPrefix)%(AssemblyName)"
-        Condition=" '@(ReferenceCopyLocalPaths)' != '' " />
+      <_JoinedFusionNames
+        Include="%(Identity)"
+        ReferenceCopyLocalPathsIdentity="@(ReferenceCopyLocalPaths->'%(Identity)')"
+        FusionName="@(ReferenceCopyLocalPaths->'%(FusionName)')"
+        FusionNameFromReferencePath="@(ReferencePath->'%(FusionName)')" />
 
-      <EmbeddedResource Include="@(_DependenciesToBecomeEmbeddedResources)" />
-      <ReferenceCopyLocalPaths Remove="@(_DependenciesToBecomeEmbeddedResources)" />
+      <_DependenciesToBecomeEmbeddedResources
+        Include="@(_JoinedFusionNames)"
+        Condition="'%(ReferenceCopyLocalPathsIdentity)' != '' and '%(FusionName)%(FusionNameFromReferencePath)' != ''"
+        AssemblyName="$([System.Text.RegularExpressions.Regex]::Replace($([MSBuild]::ValueOrDefault('%(FusionName)', '%(FusionNameFromReferencePath)')), ',.*', ''))"
+        KeepMetadata="x" />
+
+      <EmbeddedResource
+        Include="@(_DependenciesToBecomeEmbeddedResources)"
+        LogicalName="$(EmbedDependenciesResourcePathPrefix)%(AssemblyName)"
+        KeepMetadata="x" />
+
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" />
     </ItemGroup>
   </Target>
 
@@ -26,14 +36,7 @@
       <_QuotedEmbedDependenciesResourcePathPrefix>"$([System.Text.RegularExpressions.Regex]::Replace('$(EmbedDependenciesResourcePathPrefix)', '(\\+)\Z', '$0$0'))"</_QuotedEmbedDependenciesResourcePathPrefix>
     </PropertyGroup>
 
-    <ItemGroup>
-      <_AssemblyNamesOfEmbeddedDependencies
-        Include="@(_DependenciesToBecomeEmbeddedResources)"
-        KeepMetadata="x"
-        AssemblyName="$([System.Text.RegularExpressions.Regex]::Replace('%(FusionName)', ',.*', ''))" />
-    </ItemGroup>
-
-    <Exec Command="&quot;$(TechsolaEmbedDependenciesExe)&quot; &quot;@(IntermediateAssembly)&quot; injectresolver $(_QuotedEmbedDependenciesResourcePathPrefix) @(_AssemblyNamesOfEmbeddedDependencies->'&quot;%(AssemblyName)&quot;', ' ')" />
+    <Exec Command="&quot;$(TechsolaEmbedDependenciesExe)&quot; injectresolver &quot;@(IntermediateAssembly)&quot; $(_QuotedEmbedDependenciesResourcePathPrefix) @(_DependenciesToBecomeEmbeddedResources->'&quot;%(AssemblyName)&quot;', ' ')" />
   </Target>
 
 </Project>
