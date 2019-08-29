@@ -2,7 +2,7 @@
 
   <Target Name="Techsola_EmbedDependencies_AddDependenciesAsEmbeddedResources" AfterTargets="ResolveAssemblyReferences" BeforeTargets="PrepareResources">
     <PropertyGroup>
-      <EmbedDependenciesResourcePathPrefix>Assemblies\</EmbedDependenciesResourcePathPrefix>
+      <EmbedDependenciesResourcePathPrefix Condition="'$(EmbedDependenciesResourcePathPrefix)' == ''">Assemblies\</EmbedDependenciesResourcePathPrefix>
     </PropertyGroup>
     <ItemGroup>
       <_JoinedFusionNames
