@@ -1,18 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
     <TargetFrameworks>net46;netcoreapp2.1</TargetFrameworks>
     <LangVersion>8</LangVersion>
     <Features>strict</Features>
 
     <DevelopmentDependency>true</DevelopmentDependency>
-    <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
+    <BuildOutputTargetFolder>tools</BuildOutputTargetFolder>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Build.Framework" Version="15.9.20" />
-    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="15.9.20" />
     <PackageReference Include="Mono.Cecil" Version="0.10.4" />
+    <PackageReference Include="System.Collections.Immutable" Version="1.5.0" />
 
     <PackageReference Update="@(PackageReference)" PrivateAssets="All" />
   </ItemGroup>

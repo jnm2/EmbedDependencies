@@ -18,7 +18,7 @@ namespace Techsola.EmbedDependencies.Tests
 
             stream.Position = 0;
 
-            InsertEmbeddedAssemblyResolver.Execute(stream, new Dictionary<string, string>
+            AssemblyRewriters.InsertEmbeddedAssemblyResolver(stream, new Dictionary<string, string>
             {
                 ["Foo"] = @"Assemblies\Foo.dll"
             });

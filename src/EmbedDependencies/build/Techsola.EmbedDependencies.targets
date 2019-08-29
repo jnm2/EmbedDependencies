@@ -1,33 +1,39 @@
-﻿<Project TreatAsLocalProperty="TaskFolder;TaskAssembly">
-
-  <PropertyGroup>
-    <TaskFolder Condition=" '$(MSBuildRuntimeType)' == 'Core' ">netcoreapp2.1</TaskFolder>
-    <TaskFolder Condition=" '$(MSBuildRuntimeType)' != 'Core' ">net46</TaskFolder>
-    <TaskAssembly>$(MSBuildThisFileDirectory)..\tasks\$(TaskFolder)\Techsola.EmbedDependencies.dll</TaskAssembly>
-  </PropertyGroup>
-
-  <UsingTask TaskName="Techsola.EmbedDependencies.InsertEmbeddedAssemblyResolver" AssemblyFile="$(TaskAssembly)" />
+﻿<Project>
 
   <Target Name="Techsola_EmbedDependencies_AddDependenciesAsEmbeddedResources" AfterTargets="ResolveAssemblyReferences" BeforeTargets="PrepareResources">
     <PropertyGroup>
       <EmbedDependenciesResourcePathPrefix>Assemblies\</EmbedDependenciesResourcePathPrefix>
     </PropertyGroup>
     <ItemGroup>
-      <_DependenciesToBecomeEmbeddedResources 
+      <_DependenciesToBecomeEmbeddedResources
         Include="@(ReferencePath)"
         KeepMetadata="FusionName"
-        LogicalName="$(EmbedDependenciesResourcePathPrefix)%(Filename)%(Extension)" 
+        LogicalName="$(EmbedDependenciesResourcePathPrefix)%(AssemblyName)"
         Condition=" '@(ReferenceCopyLocalPaths)' != '' " />
-      
+
       <EmbeddedResource Include="@(_DependenciesToBecomeEmbeddedResources)" />
       <ReferenceCopyLocalPaths Remove="@(_DependenciesToBecomeEmbeddedResources)" />
     </ItemGroup>
   </Target>
 
   <Target Name="Techsola_EmbedDependencies_InsertEmbeddedAssemblyResolver" AfterTargets="CoreCompile">
-    <Techsola.EmbedDependencies.InsertEmbeddedAssemblyResolver
-      TargetAssembly="@(IntermediateAssembly)"
-      DependenciesToBecomeEmbeddedResources="@(_DependenciesToBecomeEmbeddedResources)" />
+    <PropertyGroup>
+      <TechsolaEmbedDependenciesExe Condition=" '$(MSBuildRuntimeType)' != 'Core' ">$(MSBuildThisFileDirectory)..\tools\net46\Techsola.EmbedDependencies.exe</TechsolaEmbedDependenciesExe>
+      <TechsolaEmbedDependenciesExe Condition=" '$(MSBuildRuntimeType)' == 'Core' ">dotnet $(MSBuildThisFileDirectory)..\tools\netcoreapp2.1\Techsola.EmbedDependencies.dll</TechsolaEmbedDependenciesExe>
+
+      <!-- Backslashes before a quote must be doubled to prevent them from escaping the quote -->
+      <!-- .NET follows the argv convention: https://docs.microsoft.com/en-us/cpp/cpp/parsing-cpp-command-line-arguments -->
+      <_QuotedEmbedDependenciesResourcePathPrefix>"$([System.Text.RegularExpressions.Regex]::Replace('$(EmbedDependenciesResourcePathPrefix)', '(\\+)\Z', '$0$0'))"</_QuotedEmbedDependenciesResourcePathPrefix>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_AssemblyNamesOfEmbeddedDependencies
+        Include="@(_DependenciesToBecomeEmbeddedResources)"
+        KeepMetadata="x"
+        AssemblyName="$([System.Text.RegularExpressions.Regex]::Replace('%(FusionName)', ',.*', ''))" />
+    </ItemGroup>
+
+    <Exec Command="&quot;$(TechsolaEmbedDependenciesExe)&quot; &quot;@(IntermediateAssembly)&quot; injectresolver $(_QuotedEmbedDependenciesResourcePathPrefix) @(_AssemblyNamesOfEmbeddedDependencies->'&quot;%(AssemblyName)&quot;', ' ')" />
   </Target>
 
 </Project>

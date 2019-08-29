@@ -1,7 +1,4 @@
-﻿using Microsoft.Build.Framework;
-using Microsoft.Build.Utilities;
-using Mono.Cecil;
-using System;
+﻿using Mono.Cecil;
 using System.Collections.Generic;
 using System.IO;
 using Techsola.EmbedDependencies.Emit;
@@ -11,52 +8,11 @@ namespace Techsola.EmbedDependencies
 {
     // Template: https://sharplab.io/#v2:EYLgxg9gTgpgtADwGwBYA0AXEBLANgHwAEAmARgFgAoQgBgAJDSUBuK2h0gOgEkB5V6vUacASjABmuGGAzYIAOwHthIgK7zZAWxicAMhACGAExhQBbUkgbE6AWQhHVUqgG8qdDxyv3HUgBQAlO6ebpSe4XQAggAO0QAiEJoG2PKcAMKqULAaCUkpnJEAzoUwmsC4AJ5ihRC4AG4wdADUALx0vPJFJWWV1bUNAuEAvsEeo3QA9BN03OJ0nAByAKIAKnRp0DDj0VDYdQYYjYxWXaXlFXRxEgZOGAD6ffUpAOZ+pz0V+sYbGjAIGHRIL9/mgosUzpUFgZtHR5NCYEEwiFxuF2H59lA6IUMLBoXQ2gBxGAYPqZMAwd7nADKOJg0N4UAWTlwfjh2gCiIiyKRXPC2DmfmxuM0dGwhVhzICDAA7BLcLhBrzUbKgYd/npDEYAGJQRI04WC2nQgKKrkjHl0c3hcZTdoYAAWpgA7mKthadnsDkdLGDuud2p1wR9Hg0/BBgAAraQAkryExQUEhmBLBoaSJQZ7ihHjUJKtEYrFGkWE4mkqDkymVfV0zQMpny1kwJ2+iEVKHaPw6dsIjko7lKvkCoU10Xi+SSmVyhV9rkziL5gyY4CqcTiUz42FNuylaAVavQvxgAzRAxgbAYCogQGOsAAaxgRj8fhSGACw+hehg8meDo5nIHHi5gBETvpo6QQNEFQrBAfjLqupgmnO4QAJCELKlYVBqxiwSua5QJw0HplABgVIEiEWkqVq8kMnjjFRYzurs+yHF4dD7iKRIkjANRkhSQbUkWdbMm8/GQvCdAGKJbbwv+gFzmhdBLGUD4mEYZbkt2hQAEIVBh3YEVAFScQAagYuCqDAfiSX6YnaIs8KghAqgAgWsA8eWMDdrJA4APx0Be0QwBA4h+D4TgIgUUmcJxtgGPI/LcVx7nkuxfhuU5HleUhnhXuO8qmpa4zbExXqsbiRgKJUlzYDIchwoZAA8jA0KCzUAHyKcpRiqepnnwtpulSd2c5tPIW5xDVsgKIuFRNaQLUcDQbV+PqLwbJoJ6wPhDJGCkZncM88ibGkknZhR/bAQA2gARFSiQ6Bh9naNdAC6G6EIQt33QAOkpwAqQ+329d9AAKBz2tdaBzshN3EmAr0btdcPXXOQwCOaQA===
 
-    public sealed class InsertEmbeddedAssemblyResolver : Task
+    public sealed class AssemblyRewriters
     {
-        [Required]
-        public ITaskItem TargetAssembly { get; set; }
-
-        [Required]
-        public ITaskItem[] DependenciesToBecomeEmbeddedResources { get; set; }
-
-        private IReadOnlyDictionary<string, string> GetEmbeddedResourceNamesByAssemblyName()
+        public static void InsertEmbeddedAssemblyResolver(Stream assemblyStream, IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName)
         {
-            var dictionary = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var item in DependenciesToBecomeEmbeddedResources)
-            {
-                var fusionName = item.GetMetadata("FusionName");
-                if (string.IsNullOrWhiteSpace(fusionName))
-                    throw new Exception("No FusionName");
-
-                var simpleName = new System.Reflection.AssemblyName(fusionName).Name;
-
-                if (dictionary.ContainsKey(simpleName))
-                    throw new Exception($"Two assemblies have the name '{simpleName}'.");
-
-                var logicalName = item.GetMetadata("LogicalName");
-                if (string.IsNullOrWhiteSpace(fusionName))
-                    throw new Exception("No LogicalName");
-
-                dictionary.Add(simpleName, logicalName);
-            }
-
-            return dictionary;
-        }
-
-        public override bool Execute()
-        {
-            var embeddedResourceNamesByAssemblyName = GetEmbeddedResourceNamesByAssemblyName();
-
-            using var stream = new FileStream(TargetAssembly.ItemSpec, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-
-            Execute(stream, embeddedResourceNamesByAssemblyName);
-            return true;
-        }
-
-        public static void Execute(Stream stream, IReadOnlyDictionary<string, string> embeddedResourceNamesByAssemblyName)
-        {
-            var assemblyDefinition = AssemblyDefinition.ReadAssembly(stream, new ReaderParameters { ReadSymbols = false });
+            var assemblyDefinition = AssemblyDefinition.ReadAssembly(assemblyStream, new ReaderParameters { ReadSymbols = false });
 
             var module = assemblyDefinition.MainModule;
             var helper = TargetMetadataSetup.InitializeMetadataHelper(module);
@@ -86,7 +42,7 @@ namespace Techsola.EmbedDependencies
 
             moduleType.Methods.Add(moduleInitializer);
 
-            assemblyDefinition.Write(stream);
+            assemblyDefinition.Write(assemblyStream);
         }
 
         private static MethodDefinition CreateModuleInitializer(
