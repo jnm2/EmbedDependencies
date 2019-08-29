@@ -1,6 +1,6 @@
 ﻿<Project>
 
-  <Target Name="Techsola_EmbedDependencies_AddDependenciesAsEmbeddedResources" AfterTargets="ResolveAssemblyReferences" BeforeTargets="PrepareResources">
+  <Target Name="Techsola_EmbedDependencies_AddDependenciesAsEmbeddedResources" Condition="'$(EmbedAllDependencies)' == 'true'" AfterTargets="ResolveAssemblyReferences" BeforeTargets="PrepareResources">
     <PropertyGroup>
       <EmbedDependenciesResourcePathPrefix Condition="'$(EmbedDependenciesResourcePathPrefix)' == ''">Assemblies\</EmbedDependenciesResourcePathPrefix>
     </PropertyGroup>
@@ -26,7 +26,7 @@
     </ItemGroup>
   </Target>
 
-  <Target Name="Techsola_EmbedDependencies_InsertEmbeddedAssemblyResolver" AfterTargets="CoreCompile">
+  <Target Name="Techsola_EmbedDependencies_InsertEmbeddedAssemblyResolver" Condition="'$(EmbedAllDependencies)' == 'true'" AfterTargets="CoreCompile">
     <PropertyGroup>
       <TechsolaEmbedDependenciesExe Condition=" '$(MSBuildRuntimeType)' != 'Core' ">$(MSBuildThisFileDirectory)..\tools\net46\Techsola.EmbedDependencies.exe</TechsolaEmbedDependenciesExe>
       <TechsolaEmbedDependenciesExe Condition=" '$(MSBuildRuntimeType)' == 'Core' ">dotnet $(MSBuildThisFileDirectory)..\tools\netcoreapp2.1\Techsola.EmbedDependencies.dll</TechsolaEmbedDependenciesExe>
